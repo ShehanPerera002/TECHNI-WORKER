@@ -33,12 +33,17 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFE8F0FF) : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? const Color(0xFF2563EB) : Colors.black12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF2563EB) : Colors.black12,
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.handyman, color: isSelected ? const Color(0xFF2563EB) : Colors.black45),
+            Icon(
+              Icons.handyman,
+              color: isSelected ? const Color(0xFF2563EB) : Colors.black45,
+            ),
             const SizedBox(height: 8),
             Text(
               name,
@@ -64,7 +69,10 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Upload Certifications", style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text(
+            "Upload Certifications",
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(14),
@@ -78,14 +86,20 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
                 const Icon(Icons.picture_as_pdf, color: Color(0xFF2563EB)),
                 const SizedBox(width: 10),
                 const Expanded(
-                  child: Text("PDF / JPG / PNG (Max 10MB)", style: TextStyle(color: Colors.black54)),
+                  child: Text(
+                    "PDF / JPG / PNG (Max 10MB)",
+                    style: TextStyle(color: Colors.black54),
+                  ),
                 ),
                 TextButton(onPressed: () {}, child: const Text("Upload")),
               ],
             ),
           ),
           const SizedBox(height: 6),
-          const Text("Example: Master_plumber_cert.pdf", style: TextStyle(fontSize: 12, color: Colors.black45)),
+          const Text(
+            "Example: Master_plumber_cert.pdf",
+            style: TextStyle(fontSize: 12, color: Colors.black45),
+          ),
         ],
       ),
     );
@@ -95,7 +109,10 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -104,10 +121,16 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const AppHeader(title: "Create Your Profile"),
-              const Text("Complete your profile to connect with clients.", style: TextStyle(color: Colors.black54)),
+              const Text(
+                "Complete your profile to connect with clients.",
+                style: TextStyle(color: Colors.black54),
+              ),
               const SizedBox(height: 16),
 
-              const Text("Select your service category", style: TextStyle(fontWeight: FontWeight.w700)),
+              const Text(
+                "Select your service category",
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 12),
 
               GridView.count(
@@ -126,12 +149,18 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
               PrimaryButton(
                 text: "Save Profile",
                 onPressed: () {
-                  
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Profile saved (UI only). Connect backend later.")),
-                    
+                    const SnackBar(
+                      content: Text(
+                        "Profile saved (UI only). Connect backend later.",
+                      ),
+                    ),
                   );
-                  Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/home',
+                    (route) => false,
+                  );
                 },
               ),
             ],
