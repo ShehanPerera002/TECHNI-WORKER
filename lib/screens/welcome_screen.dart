@@ -28,7 +28,7 @@ class WelcomeScreen extends StatelessWidget {
 
                 // MAIN TAGLINE
                 const Text(
-                  "Your Local Experts On-Demand",
+                  "Connect With Clients,  Grow Your Business",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 22,
