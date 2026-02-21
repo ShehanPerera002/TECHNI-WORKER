@@ -34,7 +34,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         maxLength: 1,
         decoration: InputDecoration(
           counterText: "",
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
         ),
       ),
     );
@@ -51,38 +51,72 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SizedBox(height: 6),
+
+              // 🔵 APP LOGO ADDED ONLY
+              Center(
+                child: Image.asset(
+                  AppAssets.welcomeLogo,
+                  height: 130,
+                  alignment: Alignment.topLeft,
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
               const AppHeader(title: "Worker Verification"),
               const SizedBox(height: 12),
+
               Center(
                 child: Image.asset(
                   AppAssets.workerVerificationPage1,
-                  height: 150,
+                  height: 250,
                   fit: BoxFit.cover,
                 ),
               ),
+
               const SizedBox(height: 20),
+
               const Text(
-                "Enter the verification code sent to your phone.",
+                "A four digit code has been sent to your phone number. Please enter the code below to verify your account.",
                 style: TextStyle(color: Colors.black54),
               ),
+
               const SizedBox(height: 18),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: otpCtrls.map(otpBox).toList(),
               ),
+
               const SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: const Text("Resend Code"),
-                ),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Didn't receive the code? ",
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                  TextButton(
+                    onPressed: () {},
+                    child: const Text(
+                      "Resend Code",
+                      style: TextStyle(
+                        color: Color(0xFF2563EB),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
+
+              const SizedBox(height: 14),
+
               PrimaryButton(
                 text: "Verify",
                 onPressed: () => Navigator.pushNamed(context, '/verified'),
