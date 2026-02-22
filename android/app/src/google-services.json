@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "183569548741",
+    "project_id": "project-techni",
+    "storage_bucket": "project-techni.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:183569548741:android:5db1ac142be71819d677ac",
+        "android_client_info": {
+          "package_name": "com.techni.worker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCl4f-KS1P_N1a34qO06IXsR933PfMwi3I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
