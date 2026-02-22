@@ -18,7 +18,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text("Worker home screen"),
         centerTitle: false,
       ),
@@ -52,7 +55,11 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(blurRadius: 10, color: Color(0x11000000), offset: Offset(0, 6)),
+          BoxShadow(
+            blurRadius: 10,
+            color: Color(0x11000000),
+            offset: Offset(0, 6),
+          ),
         ],
         border: Border.all(color: Colors.black12),
       ),
@@ -62,11 +69,17 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("This Week's Earnings", style: TextStyle(color: Colors.black54)),
+                const Text(
+                  "This Week's Earnings",
+                  style: TextStyle(color: Colors.black54),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   "Rs. ${weekEarnings.toStringAsFixed(2)}",
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Row(
@@ -75,10 +88,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     SizedBox(width: 6),
                     Text(
                       "+15% from last week",
-                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
-                )
+                ),
               ],
             ),
           ),
@@ -88,7 +104,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -106,7 +124,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   Widget _tabs() {
     return Row(
       children: [
-        Expanded(child: _tabButton("New Job Requests", tabIndex == 0, badge: newJobCount)),
+        Expanded(
+          child: _tabButton(
+            "New Job Requests",
+            tabIndex == 0,
+            badge: newJobCount,
+          ),
+        ),
         const SizedBox(width: 10),
         Expanded(child: _tabButton("Scheduled Jobs", tabIndex == 1)),
       ],
@@ -116,13 +140,16 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   Widget _tabButton(String text, bool active, {int? badge}) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => setState(() => tabIndex = (text == "New Job Requests") ? 0 : 1),
+      onTap: () =>
+          setState(() => tabIndex = (text == "New Job Requests") ? 0 : 1),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
           color: active ? const Color(0xFFE8F0FF) : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: active ? const Color(0xFF2563EB) : Colors.black12),
+          border: Border.all(
+            color: active ? const Color(0xFF2563EB) : Colors.black12,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -144,10 +171,14 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                 ),
                 child: Text(
                   "$badge",
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
-              )
-            ]
+              ),
+            ],
           ],
         ),
       ),
@@ -160,7 +191,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.black12),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 6))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 10,
+            offset: Offset(0, 6),
+          ),
+        ],
         color: Colors.white,
       ),
       child: Row(
@@ -171,7 +208,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               children: const [
                 Text(
                   "Plumbing • Emergency",
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 SizedBox(height: 4),
                 Text(
@@ -186,7 +226,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                 SizedBox(height: 8),
                 Row(
                   children: [
-                    Text("Customer Rating: ", style: TextStyle(color: Colors.black54)),
+                    Text(
+                      "Customer Rating: ",
+                      style: TextStyle(color: Colors.black54),
+                    ),
                     Icon(Icons.star, color: Colors.orange, size: 16),
                     Icon(Icons.star, color: Colors.orange, size: 16),
                     Icon(Icons.star, color: Colors.orange, size: 16),
@@ -209,7 +252,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               border: Border.all(color: Colors.black12),
             ),
             child: const Icon(Icons.image, color: Colors.black45),
-          )
+          ),
         ],
       ),
     );
@@ -226,7 +269,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Job Information", style: TextStyle(fontWeight: FontWeight.w800)),
+          const Text(
+            "Job Information",
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 12),
 
           // Description
@@ -239,7 +285,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Description", style: TextStyle(fontWeight: FontWeight.w800)),
+                    Text(
+                      "Description",
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
                     SizedBox(height: 4),
                     Text(
                       "The main pipe under the kitchen sink has a steady drip. "
@@ -264,7 +313,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Address", style: TextStyle(fontWeight: FontWeight.w800)),
+                    Text(
+                      "Address",
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
                     SizedBox(height: 4),
                     Text(
                       "No. 63, 2/8 Cross Street, Athurugiriya",
@@ -290,7 +342,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             child: const Center(
               child: Text(
                 "Map Preview (Google Map later)",
-                style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -309,14 +364,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Accepted (UI only)")),
                 );
               },
-              child: const Text("Accept", style: TextStyle(fontWeight: FontWeight.w800)),
+              child: const Text(
+                "Accept",
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ),
         ),
@@ -328,14 +388,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.black87,
                 side: const BorderSide(color: Colors.black26),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Declined (UI only)")),
                 );
               },
-              child: const Text("Decline", style: TextStyle(fontWeight: FontWeight.w800)),
+              child: const Text(
+                "Decline",
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ),
         ),

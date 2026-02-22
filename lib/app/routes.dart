@@ -8,7 +8,6 @@ import '../screens/create_profile_screen.dart';
 import '../screens/select_category_screen.dart';
 import '../screens/worker_home_screen.dart';
 
-
 final Map<String, WidgetBuilder> appRoutes = {
   '/': (context) => const WelcomeScreen(),
   '/signin': (context) => const WorkerSignInScreen(),
@@ -17,5 +16,4 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/profile': (context) => const CreateProfileScreen(),
   '/category': (context) => const SelectCategoryScreen(),
   '/home': (context) => const WorkerHomeScreen(),
-
 };

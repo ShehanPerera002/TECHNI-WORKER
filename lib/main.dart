@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
-import 'app/techni_worker_app.dart';
+import 'app/routes.dart';
 
 void main() {
-  runApp(const TechniWorkerApp());
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      initialRoute: '/',
+      routes: appRoutes,
+    );
+  }
 }
