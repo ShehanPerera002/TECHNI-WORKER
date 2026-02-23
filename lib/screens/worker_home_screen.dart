@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
 
@@ -17,6 +18,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
