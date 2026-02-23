@@ -29,7 +29,13 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
         backgroundColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            }
+          },
         ),
       ),
       body: Stack(
