@@ -51,7 +51,13 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushNamedAndRemoveUntil(context, '/verified', (route) => false);
+            }
+          },
         ),
       ),
       body: SafeArea(
