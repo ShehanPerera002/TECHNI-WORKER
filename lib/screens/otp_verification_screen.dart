@@ -138,7 +138,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   Widget otpBox(int index) {
     return SizedBox(
       width: 50,
-      height: 60,
+      height: 70,
       child: TextField(
         controller: otpCtrls[index],
         focusNode: otpFocusNodes[index],
