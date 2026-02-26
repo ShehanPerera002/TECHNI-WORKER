@@ -39,7 +39,7 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
       // Format phone number with country code if not present
       String phoneNumber = phoneCtrl.text.trim();
       if (!phoneNumber.startsWith('+')) {
-        phoneNumber = '+92${phoneNumber.replaceFirst('0', '')}'; // Pakistan code
+        phoneNumber = '+94${phoneNumber.replaceFirst('0', '')}'; // Sri Lanka code
       }
 
       await _authService.sendOTP(phoneNumber);
