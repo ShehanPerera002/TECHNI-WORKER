@@ -15,10 +15,34 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
   final nameCtrl = TextEditingController();
   final ageCtrl = TextEditingController();
   final nicCtrl = TextEditingController();
-  
+
   final UploadService _uploadService = UploadService();
   bool _uploadingProfile = false;
   bool _uploadingNIC = false;
+  bool _uploadingDocument = false;
+  String? _uploadedDocumentName;
+  Future<void> _pickAndUploadDocument() async {
+    try {
+      final pickedFile = await _uploadService.pickDocument();
+      if (pickedFile != null) {
+        setState(() {
+          _uploadingDocument = true;
+          _uploadedDocumentName = pickedFile.name;
+        });
+
+        await _uploadService.uploadDocument(pickedFile, 'your_token');
+
+        if (mounted) {
+          setState(() => _uploadingDocument = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Document uploaded successfully!')),
+          );
+        }
+      }
+    } catch (e) {
+      
+    }
+  }
 
   @override
   void dispose() {
@@ -188,6 +212,15 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
                 "Upload a photo of NIC (JPG/PNG)",
                 _uploadingNIC,
                 _pickAndUploadNIC,
+              ),
+              const SizedBox(height: 12),
+
+              uploadBox(
+                _uploadedDocumentName != null
+                    ? "Uploaded: $_uploadedDocumentName"
+                    : "Click to upload document (PDF/DOC/IMG)",
+                _uploadingDocument,
+                _pickAndUploadDocument,
               ),
               const SizedBox(height: 12),
 
