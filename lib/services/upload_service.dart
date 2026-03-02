@@ -2,14 +2,28 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 class UploadService {
   final ImagePicker _imagePicker = ImagePicker();
   late final Dio _dio;
-  // Change this to your backend IP when running on physical device
-  // For emulator: http://10.0.2.2:5000/api
-  // For physical device: http://YOUR_PC_IP:5000/api
-  final String _baseUrl = 'http://10.0.2.2:5000/api/workers';
+
+  String get _baseUrl {
+    const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
+    if (configuredBaseUrl.isNotEmpty) {
+      return configuredBaseUrl;
+    }
+
+    if (kIsWeb) {
+      return 'http://localhost:5000/api/workers';
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:5000/api/workers';
+    }
+
+    return 'http://localhost:5000/api/workers';
+  }
 
   UploadService() {
     _dio = Dio(
@@ -110,9 +124,14 @@ class UploadService {
     }
   }
 
-  Future<String?> uploadNIC(XFile imageFile, String token) async {
+  Future<String?> uploadNIC(
+    XFile imageFile,
+    String token, {
+    String side = 'front',
+  }) async {
     try {
       FormData formData = FormData.fromMap({
+        'side': side,
         'image': await MultipartFile.fromFile(
           imageFile.path,
           filename: imageFile.name,
