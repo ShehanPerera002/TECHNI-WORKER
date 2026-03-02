@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/app_header.dart';
 import '../widgets/input_field.dart';
 import '../widgets/primary_button.dart';
@@ -18,30 +19,21 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
 
   final UploadService _uploadService = UploadService();
   bool _uploadingProfile = false;
-  bool _uploadingNIC = false;
-  bool _uploadingDocument = false;
-  String? _uploadedDocumentName;
-  Future<void> _pickAndUploadDocument() async {
-    try {
-      final pickedFile = await _uploadService.pickDocument();
-      if (pickedFile != null) {
-        setState(() {
-          _uploadingDocument = true;
-          _uploadedDocumentName = pickedFile.name;
-        });
+  bool _uploadingNICFront = false;
+  bool _uploadingNICBack = false;
 
-        await _uploadService.uploadDocument(pickedFile, 'your_token');
-
-        if (mounted) {
-          setState(() => _uploadingDocument = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Document uploaded successfully!')),
-          );
-        }
-      }
-    } catch (e) {
-      
+  Future<String> _getAuthToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('Please sign in first');
     }
+
+    final token = await user.getIdToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Failed to get auth token');
+    }
+
+    return token;
   }
 
   @override
@@ -87,49 +79,77 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
       final pickedFile = await _uploadService.pickImage();
       if (pickedFile != null) {
         setState(() => _uploadingProfile = true);
-        
-        await _uploadService.uploadProfileImage(pickedFile, 'your_token');
-        
+
+        final token = await _getAuthToken();
+        await _uploadService.uploadProfileImage(pickedFile, token);
+
         if (mounted) {
           setState(() => _uploadingProfile = false);
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile photo uploaded successfully!')),
+            const SnackBar(
+              content: Text('Profile photo uploaded successfully!'),
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _uploadingProfile = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload: $e')));
       }
     }
   }
 
-  Future<void> _pickAndUploadNIC() async {
+  Future<void> _pickAndUploadNIC(String side) async {
     try {
       final pickedFile = await _uploadService.pickImage();
       if (pickedFile != null) {
-        setState(() => _uploadingNIC = true);
-        
-        await _uploadService.uploadNIC(pickedFile, 'your_token');
-        
+        setState(() {
+          if (side == 'front') {
+            _uploadingNICFront = true;
+          } else {
+            _uploadingNICBack = true;
+          }
+        });
+
+        final token = await _getAuthToken();
+        await _uploadService.uploadNIC(pickedFile, token, side: side);
+
         if (mounted) {
-          setState(() => _uploadingNIC = false);
-          
+          setState(() {
+            if (side == 'front') {
+              _uploadingNICFront = false;
+            } else {
+              _uploadingNICBack = false;
+            }
+          });
+
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('NIC uploaded successfully!')),
+            SnackBar(
+              content: Text(
+                side == 'front'
+                    ? 'NIC front photo uploaded successfully!'
+                    : 'NIC back photo uploaded successfully!',
+              ),
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _uploadingNIC = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload: $e')),
-        );
+        setState(() {
+          if (side == 'front') {
+            _uploadingNICFront = false;
+          } else {
+            _uploadingNICBack = false;
+          }
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload: $e')));
       }
     }
   }
@@ -145,7 +165,11 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
             } else {
-              Navigator.pushNamedAndRemoveUntil(context, '/verified', (route) => false);
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/verified',
+                (route) => false,
+              );
             }
           },
         ),
@@ -182,7 +206,9 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _uploadingProfile ? "Uploading..." : "Upload Profile Photo",
+                        _uploadingProfile
+                            ? "Uploading..."
+                            : "Upload Profile Photo",
                         style: const TextStyle(
                           color: Color(0xFF2563EB),
                           fontWeight: FontWeight.w600,
@@ -209,18 +235,16 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
               const SizedBox(height: 12),
 
               uploadBox(
-                "Upload a photo of NIC (JPG/PNG)",
-                _uploadingNIC,
-                _pickAndUploadNIC,
+                "Upload NIC Front Photo (JPG/PNG)",
+                _uploadingNICFront,
+                () => _pickAndUploadNIC('front'),
               ),
               const SizedBox(height: 12),
 
               uploadBox(
-                _uploadedDocumentName != null
-                    ? "Uploaded: $_uploadedDocumentName"
-                    : "Click to upload document (PDF/DOC/IMG)",
-                _uploadingDocument,
-                _pickAndUploadDocument,
+                "Upload NIC Back Photo (JPG/PNG)",
+                _uploadingNICBack,
+                () => _pickAndUploadNIC('back'),
               ),
               const SizedBox(height: 12),
 
