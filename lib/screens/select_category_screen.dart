@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../widgets/app_header.dart';
 import '../widgets/primary_button.dart';
 
+import '../services/upload_service.dart';
+
 class SelectCategoryScreen extends StatefulWidget {
   const SelectCategoryScreen({super.key});
 
@@ -11,7 +13,6 @@ class SelectCategoryScreen extends StatefulWidget {
 
 class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
   String selected = "Plumber";
-
   final categories = const [
     "Plumber",
     "Electrician",
@@ -22,9 +23,12 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
     "ELV Repair",
   ];
 
+  final UploadService _uploadService = UploadService();
+  String? _uploadedFileName;
+  bool _uploading = false;
+
   Widget categoryTile(String name) {
     final isSelected = selected == name;
-
     return GestureDetector(
       onTap: () => setState(() => selected = name),
       child: Container(
@@ -58,6 +62,26 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
     );
   }
 
+  Future<void> _pickAndUploadDocument() async {
+    setState(() => _uploading = true);
+    try {
+      final pickedFile = await _uploadService.pickDocument();
+      if (pickedFile != null) {
+        setState(() {
+          _uploadedFileName = pickedFile.name;
+        });
+        // Optionally upload to backend here:
+        // await _uploadService.uploadDocument(pickedFile, 'your_token');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick document: $e')),
+      );
+    } finally {
+      setState(() => _uploading = false);
+    }
+  }
+
   Widget uploadCertBox() {
     return Container(
       width: double.infinity,
@@ -74,49 +98,56 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: const Color(0xFFF7F9FF),
-              border: Border.all(color: Colors.black12),
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.cloud_upload,
-                  size: 28,
-                  color: Color(0xFF2563EB),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  "Click to upload documents",
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "PDF, JPG, PNG (Max 10MB)",
-                  style: TextStyle(fontSize: 12, color: Colors.black45),
-                ),
-              ],
+          GestureDetector(
+            onTap: _uploading ? null : _pickAndUploadDocument,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFFF7F9FF),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.cloud_upload,
+                    size: 28,
+                    color: _uploading ? Colors.grey : const Color(0xFF2563EB),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _uploading ? "Uploading..." : "Click to upload documents",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    "PDF, JPG, PNG (Max 10MB)",
+                    style: TextStyle(fontSize: 12, color: Colors.black45),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: const Color(0xFFF7F9FF),
+          if (_uploadedFileName != null)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: const Color(0xFFF7F9FF),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.insert_drive_file, color: Color(0xFF2563EB)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_uploadedFileName!)),
+                  GestureDetector(
+                    onTap: () => setState(() => _uploadedFileName = null),
+                    child: const Icon(Icons.delete, size: 18),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              children: const [
-                Icon(Icons.insert_drive_file, color: Color(0xFF2563EB)),
-                SizedBox(width: 8),
-                Expanded(child: Text("Master_plumber_cert.pdf")),
-                Icon(Icons.delete, size: 18),
-              ],
-            ),
-          ),
         ],
       ),
     );

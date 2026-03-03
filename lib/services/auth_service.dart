@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
-  
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
+
   String? _verificationId;
   int? _resendToken;
 
@@ -15,17 +15,28 @@ class AuthService {
     return _instance;
   }
 
+  Future<void> _logFirebaseIdToken(User? user) async {
+    if (user == null) {
+      debugPrint('No authenticated user found for token logging');
+      return;
+    }
+
+    final idToken = await user.getIdToken(true);
+    debugPrint('FIREBASE_TOKEN: $idToken');
+  }
+
   /// Send OTP to phone number
   Future<void> sendOTP(String phoneNumber) async {
     try {
       debugPrint('Sending OTP to: $phoneNumber');
-      
+
       await _auth.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         timeout: const Duration(seconds: 60),
         verificationCompleted: (PhoneAuthCredential credential) async {
           debugPrint('Verification completed automatically');
-          await _auth.signInWithCredential(credential);
+          final userCredential = await _auth.signInWithCredential(credential);
+          await _logFirebaseIdToken(userCredential.user);
         },
         verificationFailed: (FirebaseAuthException e) {
           debugPrint('Verification failed: ${e.message}');
@@ -55,14 +66,19 @@ class AuthService {
       }
 
       debugPrint('Verifying OTP: $otp');
-      
+
       PhoneAuthCredential credential = PhoneAuthProvider.credential(
         verificationId: _verificationId!,
         smsCode: otp,
       );
 
-      UserCredential userCredential = await _auth.signInWithCredential(credential);
-      debugPrint('OTP verified successfully. User: ${userCredential.user?.phoneNumber}');
+      UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
+      debugPrint(
+        'OTP verified successfully. User: ${userCredential.user?.phoneNumber}',
+      );
+      await _logFirebaseIdToken(userCredential.user);
       return userCredential;
     } catch (e) {
       debugPrint('Error verifying OTP: $e');
@@ -74,14 +90,15 @@ class AuthService {
   Future<void> resendOTP(String phoneNumber) async {
     try {
       debugPrint('Resending OTP to: $phoneNumber');
-      
+
       await _auth.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         timeout: const Duration(seconds: 60),
         forceResendingToken: _resendToken,
         verificationCompleted: (PhoneAuthCredential credential) async {
           debugPrint('Verification completed automatically on resend');
-          await _auth.signInWithCredential(credential);
+          final userCredential = await _auth.signInWithCredential(credential);
+          await _logFirebaseIdToken(userCredential.user);
         },
         verificationFailed: (FirebaseAuthException e) {
           debugPrint('Resend verification failed: ${e.message}');
