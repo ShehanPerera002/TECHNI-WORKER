@@ -297,7 +297,30 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
 
               PrimaryButton(
                 text: "Save and Continue",
-                onPressed: () => Navigator.pushNamed(context, '/category'),
+                onPressed: () {
+                  final name = nameCtrl.text.trim();
+                  final nicNumber = nicCtrl.text.trim();
+                  final age = ageCtrl.text.trim();
+
+                  if (name.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please enter your full name'),
+                      ),
+                    );
+                    return;
+                  }
+
+                  Navigator.pushNamed(
+                    context,
+                    '/category',
+                    arguments: {
+                      'name': name,
+                      'nicNumber': nicNumber,
+                      'age': age,
+                    },
+                  );
+                },
               ),
             ],
           ),
