@@ -153,4 +153,37 @@ class UploadService {
       rethrow;
     }
   }
+
+  Future<void> createProfile({
+    required String token,
+    required String name,
+    required String category,
+  }) async {
+    try {
+      await _dio.post(
+        '$_baseUrl/profile',
+        data: {'name': name, 'category': category},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } catch (e) {
+      debugPrint('Error creating profile: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateNicNumber({
+    required String token,
+    required String nicNumber,
+  }) async {
+    try {
+      await _dio.patch(
+        '$_baseUrl/nic-number',
+        data: {'nicNumber': nicNumber},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } catch (e) {
+      debugPrint('Error updating NIC number: $e');
+      rethrow;
+    }
+  }
 }
