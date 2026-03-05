@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:file_picker/file_picker.dart';
 import '../widgets/app_header.dart';
 import '../widgets/primary_button.dart';
 
@@ -25,7 +27,23 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
 
   final UploadService _uploadService = UploadService();
   String? _uploadedFileName;
+  PlatformFile? _pickedDocument;
   bool _uploading = false;
+  bool _savingProfile = false;
+
+  Future<String> _getAuthToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('Please sign in first');
+    }
+
+    final token = await user.getIdToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Failed to get auth token');
+    }
+
+    return token;
+  }
 
   Widget categoryTile(String name) {
     final isSelected = selected == name;
@@ -68,15 +86,14 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
       final pickedFile = await _uploadService.pickDocument();
       if (pickedFile != null) {
         setState(() {
+          _pickedDocument = pickedFile;
           _uploadedFileName = pickedFile.name;
         });
-        // Optionally upload to backend here:
-        // await _uploadService.uploadDocument(pickedFile, 'your_token');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to pick document: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to pick document: $e')));
     } finally {
       setState(() => _uploading = false);
     }
@@ -142,7 +159,10 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
                   const SizedBox(width: 8),
                   Expanded(child: Text(_uploadedFileName!)),
                   GestureDetector(
-                    onTap: () => setState(() => _uploadedFileName = null),
+                    onTap: () => setState(() {
+                      _uploadedFileName = null;
+                      _pickedDocument = null;
+                    }),
                     child: const Icon(Icons.delete, size: 18),
                   ),
                 ],
@@ -151,6 +171,62 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _saveProfileToBackend(BuildContext context) async {
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    final name = (args?['name'] as String? ?? '').trim();
+    final nicNumber = (args?['nicNumber'] as String? ?? '').trim();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Name is missing. Please complete profile details.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _savingProfile = true);
+
+    try {
+      final token = await _getAuthToken();
+
+      await _uploadService.createProfile(
+        token: token,
+        name: name,
+        category: selected,
+      );
+
+      if (nicNumber.isNotEmpty) {
+        await _uploadService.updateNicNumber(
+          token: token,
+          nicNumber: nicNumber,
+        );
+      }
+
+      if (_pickedDocument != null) {
+        await _uploadService.uploadDocument(_pickedDocument!, token);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save profile: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _savingProfile = false);
+      }
+    }
   }
 
   @override
@@ -164,7 +240,11 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
             } else {
-              Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/profile',
+                (route) => false,
+              );
             }
           },
         ),
@@ -219,13 +299,12 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
               const SizedBox(height: 22),
 
               PrimaryButton(
-                text: "Save Profile",
+                text: _savingProfile ? "Saving..." : "Save Profile",
                 onPressed: () {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/home',
-                    (route) => false,
-                  );
+                  if (_savingProfile) {
+                    return;
+                  }
+                  _saveProfileToBackend(context);
                 },
               ),
             ],
