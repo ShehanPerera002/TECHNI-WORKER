@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart'; // මේක අලුතින් ඕනේ
-import 'app/techni_worker_app.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'app/routes.dart';
+import 'app/theme.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  
   await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyCl4f-KS1P_N1a34qO06IXsR933PfMwi3I",
-      appId: "1:183569548741:android:5db1ac142be71819d677ac",
-      messagingSenderId: "183569548741",
-      projectId: "project-techni",
-      storageBucket: "project-techni.firebasestorage.app",
-    ),
+    options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  runApp(const MyApp());
+}
 
-  runApp(const TechniWorkerApp());
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'TECHNI Worker',
+      theme: appTheme,
+      initialRoute: '/',
+      routes: appRoutes,
+    );
+  }
 }
