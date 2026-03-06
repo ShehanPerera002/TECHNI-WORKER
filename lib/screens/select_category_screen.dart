@@ -66,6 +66,7 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
     setState(() => _uploading = true);
     try {
       final pickedFile = await _uploadService.pickDocument();
+      if (!mounted) return;
       if (pickedFile != null) {
         setState(() {
           _uploadedFileName = pickedFile.name;
@@ -74,11 +75,14 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
         // await _uploadService.uploadDocument(pickedFile, 'your_token');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to pick document: $e')),
       );
     } finally {
-      setState(() => _uploading = false);
+      if (mounted) {
+        setState(() => _uploading = false);
+      }
     }
   }
 
