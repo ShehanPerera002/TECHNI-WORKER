@@ -1,8 +1,11 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
-import '../widgets/app_header.dart';
-import '../widgets/primary_button.dart';
-import '../services/auth_service.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../auth_service.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/primary_button.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({super.key});
@@ -17,7 +20,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     (_) => TextEditingController(),
   );
   final List<FocusNode> otpFocusNodes = List.generate(6, (_) => FocusNode());
-  
+
   final AuthService _authService = AuthService();
   bool _isLoading = false;
   bool _isResending = false;
@@ -27,23 +30,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    // Get phone number from route arguments
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args != null && mounted) {
         setState(() => _phoneNumber = args as String);
       }
     });
-    
-    // Setup listeners for each OTP box
-    for (int i = 0; i < otpCtrls.length; i++) {
-      otpCtrls[i].addListener(() {
-        if (otpCtrls[i].text.length == 1 && i < otpCtrls.length - 1) {
-          // Move to next box when user enters a digit
-          FocusScope.of(context).requestFocus(otpFocusNodes[i + 1]);
-        }
-      });
-    }
   }
 
   @override
@@ -55,6 +47,31 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       f.dispose();
     }
     super.dispose();
+  }
+
+  void _handleOtpChanged(int index, String value) {
+    if (value.isNotEmpty) {
+      // Keep only one digit per box and move forward.
+      final digit = value.substring(value.length - 1);
+      if (otpCtrls[index].text != digit) {
+        otpCtrls[index].text = digit;
+      }
+      otpCtrls[index].selection = TextSelection.fromPosition(
+        const TextPosition(offset: 1),
+      );
+
+      if (index < otpCtrls.length - 1) {
+        FocusScope.of(context).requestFocus(otpFocusNodes[index + 1]);
+      } else {
+        otpFocusNodes[index].unfocus();
+      }
+      return;
+    }
+
+    // Backspace flow: when box becomes empty, move to previous box.
+    if (index > 0) {
+      FocusScope.of(context).requestFocus(otpFocusNodes[index - 1]);
+    }
   }
 
   Future<void> _verifyOTP() async {
@@ -71,13 +88,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
 
     try {
-      // Add timeout to prevent hanging
-      await _authService.verifyOTP(otp).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('Verification timeout. Please try again.');
-        },
-      );
+      await _authService
+          .verifyOTP(otp)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw TimeoutException('Verification timeout. Please try again.');
+            },
+          );
 
       if (mounted) {
         setState(() => _isLoading = false);
@@ -109,18 +127,21 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
 
     try {
-      await _authService.resendOTP(_phoneNumber!).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('Resend timeout. Please try again.');
-        },
-      );
+      await _authService
+          .resendOTP(_phoneNumber!)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw TimeoutException('Resend timeout. Please try again.');
+            },
+          );
 
       if (mounted) {
         setState(() => _isResending = false);
-        for (var c in otpCtrls) {
+        for (final c in otpCtrls) {
           c.clear();
         }
+        FocusScope.of(context).requestFocus(otpFocusNodes.first);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('OTP resent successfully!')),
         );
@@ -143,11 +164,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         controller: otpCtrls[index],
         focusNode: otpFocusNodes[index],
         keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         textAlign: TextAlign.center,
         maxLength: 1,
+        onChanged: (value) => _handleOtpChanged(index, value),
         style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
         decoration: InputDecoration(
-          counterText: "",
+          counterText: '',
           filled: true,
           fillColor: Colors.grey[100],
           border: OutlineInputBorder(
@@ -178,7 +201,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
             } else {
-              Navigator.pushNamedAndRemoveUntil(context, '/signin', (route) => false);
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/signin',
+                (route) => false,
+              );
             }
           },
         ),
@@ -190,36 +217,31 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 6),
-
               const SizedBox(height: 10),
-
-              const AppHeader(title: "Worker Verification"),
+              const AppHeader(title: 'Worker Verification'),
               const SizedBox(height: 12),
-
               Center(
                 child: Container(
                   height: 200,
                   color: Colors.grey[100],
-                  child: const Icon(Icons.verified_user, size: 80, color: Colors.blue),
+                  child: const Icon(
+                    Icons.verified_user,
+                    size: 80,
+                    color: Colors.blue,
+                  ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
               const Text(
-                "A six digit code has been sent to your phone number. Please enter the code below to verify your account.",
+                'A six digit code has been sent to your phone number. Please enter the code below to verify your account.',
                 style: TextStyle(color: Colors.black54),
               ),
-
               const SizedBox(height: 28),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: List.generate(6, (index) => otpBox(index)),
               ),
-
               const SizedBox(height: 28),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -230,7 +252,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   TextButton(
                     onPressed: _isResending ? null : _resendOTP,
                     child: Text(
-                      _isResending ? "Resending..." : "Resend Code",
+                      _isResending ? 'Resending...' : 'Resend Code',
                       style: const TextStyle(
                         color: Color(0xFF2563EB),
                         fontWeight: FontWeight.w600,
@@ -239,9 +261,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 14),
-
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -251,9 +271,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ),
-
               PrimaryButton(
-                text: _isLoading ? "Verifying..." : "Verify",
+                text: _isLoading ? 'Verifying...' : 'Verify',
                 onPressed: _isLoading ? () {} : _verifyOTP,
               ),
             ],

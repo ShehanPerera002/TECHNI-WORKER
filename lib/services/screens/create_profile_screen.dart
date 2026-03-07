@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../widgets/app_header.dart';
-import '../widgets/input_field.dart';
-import '../widgets/primary_button.dart';
-import '../services/upload_service.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/input_field.dart';
+import '../../widgets/primary_button.dart';
+import '../upload_service.dart';
 
 class CreateProfileScreen extends StatefulWidget {
   const CreateProfileScreen({super.key});

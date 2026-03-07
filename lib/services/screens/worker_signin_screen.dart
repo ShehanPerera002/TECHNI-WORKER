@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import '../core/assets.dart';
-import '../widgets/input_field.dart';
-import '../widgets/primary_button.dart';
-import '../services/auth_service.dart';
+import '../../core/assets.dart';
+import '../../widgets/input_field.dart';
+import '../../widgets/primary_button.dart';
+import '../auth_service.dart';
 
 class WorkerSignInScreen extends StatefulWidget {
   const WorkerSignInScreen({super.key});
@@ -15,11 +15,28 @@ class WorkerSignInScreen extends StatefulWidget {
 class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
   final phoneCtrl = TextEditingController();
   final AuthService _authService = AuthService();
+  late final TapGestureRecognizer _termsRecognizer;
+  late final TapGestureRecognizer _privacyRecognizer;
   bool _isLoading = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _termsRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.pushNamed(context, '/terms');
+      };
+    _privacyRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.pushNamed(context, '/privacy');
+      };
+  }
+
+  @override
   void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
     phoneCtrl.dispose();
     super.dispose();
   }
@@ -39,16 +56,17 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
       // Format phone number with country code if not present
       String phoneNumber = phoneCtrl.text.trim();
       if (!phoneNumber.startsWith('+')) {
-        phoneNumber = '+94${phoneNumber.replaceFirst('0', '')}'; // Sri Lanka code
+        phoneNumber =
+            '+94${phoneNumber.replaceFirst('0', '')}'; // Sri Lanka code
       }
 
       await _authService.sendOTP(phoneNumber);
 
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('OTP sent successfully!')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('OTP sent successfully!')));
         // Navigate to OTP verification screen
         Navigator.pushNamed(context, '/otp', arguments: phoneNumber);
       }
@@ -58,9 +76,9 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
           _isLoading = false;
           _error = 'Error: ${e.toString()}';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send OTP: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to send OTP: $e')));
       }
     }
   }
@@ -181,10 +199,7 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
                               color: Color(0xFF2563EB),
                               fontWeight: FontWeight.w600,
                             ),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = () {
-                                // Navigate to Terms
-                              },
+                            recognizer: _termsRecognizer,
                           ),
                           const TextSpan(text: " and "),
                           TextSpan(
@@ -193,10 +208,7 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
                               color: Color(0xFF2563EB),
                               fontWeight: FontWeight.w600,
                             ),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = () {
-                                // Navigate to Privacy
-                              },
+                            recognizer: _privacyRecognizer,
                           ),
                         ],
                       ),

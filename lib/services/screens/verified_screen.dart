@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../core/assets.dart';
-import '../widgets/primary_button.dart';
+import '../../core/assets.dart';
+import '../../widgets/primary_button.dart';
 
 class VerifiedScreen extends StatelessWidget {
   const VerifiedScreen({super.key});
@@ -19,7 +19,11 @@ class VerifiedScreen extends StatelessWidget {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
             } else {
-              Navigator.pushNamedAndRemoveUntil(context, '/otp', (route) => false);
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/otp',
+                (route) => false,
+              );
             }
           },
         ),
