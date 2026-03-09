@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import '../widgets/app_header.dart';
 import '../widgets/input_field.dart';
 import '../widgets/primary_button.dart';
-import '../services/upload_service.dart';
+import 'select_category_screen.dart';
 
 class CreateProfileScreen extends StatefulWidget {
   const CreateProfileScreen({super.key});
@@ -18,28 +18,10 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
   final ageCtrl = TextEditingController();
   final nicCtrl = TextEditingController();
 
-  final UploadService _uploadService = UploadService();
-  bool _uploadingProfile = false;
-  bool _uploadingNICFront = false;
-  bool _uploadingNICBack = false;
-
-
-  bool _uploadingPolice = false;
+  PlatformFile? _profilePhoto;
+  PlatformFile? _nicFrontFile;
+  PlatformFile? _nicBackFile;
   PlatformFile? _policeCertFile;
-
-  Future<String> _getAuthToken() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('Please sign in first');
-    }
-
-    final token = await user.getIdToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Failed to get auth token');
-    }
-
-    return token;
-  }
 
   @override
   void dispose() {
@@ -49,165 +31,138 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
     super.dispose();
   }
 
-  Widget uploadBox(String text, bool isUploading, VoidCallback onTap) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.black12),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.upload_file, color: Color(0xFF2563EB)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: const TextStyle(color: Colors.black54)),
+  Future<void> _pickFile(String type) async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+        withData: true,
+      );
+
+      if (result != null) {
+        setState(() {
+          if (type == 'front') _nicFrontFile = result.files.first;
+          if (type == 'back') _nicBackFile = result.files.first;
+          if (type == 'police') _policeCertFile = result.files.first;
+          if (type == 'profile') _profilePhoto = result.files.first;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking file: $e')),
+      );
+    }
+  }
+
+  Widget uploadBox(String label, PlatformFile? selectedFile, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selectedFile != null ? const Color(0xFFF0F7FF) : Colors.white,
+          border: Border.all(
+            color: selectedFile != null ? const Color(0xFF2563EB) : Colors.black12,
           ),
-          TextButton(
-            onPressed: isUploading ? null : onTap,
-            child: isUploading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text("Upload"),
-          ),
-        ],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selectedFile != null ? Icons.check_circle : Icons.upload_file,
+              color: const Color(0xFF2563EB),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                selectedFile != null ? selectedFile.name : label,
+                style: TextStyle(
+                  color: selectedFile != null ? Colors.black87 : Colors.black54,
+                  fontWeight: selectedFile != null ? FontWeight.w600 : FontWeight.normal,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (selectedFile != null)
+              const Icon(Icons.edit, size: 18, color: Colors.grey)
+            else
+              const Text(
+                "Upload",
+                style: TextStyle(
+                  color: Color(0xFF2563EB),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _pickAndUploadProfile() async {
-    try {
-      final pickedFile = await _uploadService.pickImage();
-      if (pickedFile != null) {
-        setState(() => _uploadingProfile = true);
-
-        final token = await _getAuthToken();
-        await _uploadService.uploadProfileImage(pickedFile, token);
-
-        if (mounted) {
-          setState(() => _uploadingProfile = false);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profile photo uploaded successfully!'),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _uploadingProfile = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to upload: $e')));
-      }
+  bool _validateFields() {
+    if (nameCtrl.text.trim().isEmpty) {
+      _showError('Please enter your full name');
+      return false;
     }
+    if (nicCtrl.text.trim().isEmpty) {
+      _showError('Please enter your NIC number');
+      return false;
+    }
+    if (_profilePhoto == null) {
+      _showError('Please upload a profile photo');
+      return false;
+    }
+    if (_nicFrontFile == null) {
+      _showError('NIC Front photo is required');
+      return false;
+    }
+    if (_nicBackFile == null) {
+      _showError('NIC Back photo is required');
+      return false;
+    }
+    if (_policeCertFile == null) {
+      _showError('Police Character Certificate is required');
+      return false;
+    }
+    return true;
   }
 
-  Future<void> _pickAndUploadNIC(String side) async {
-    try {
-      final pickedFile = await _uploadService.pickImage();
-      if (pickedFile != null) {
-        setState(() {
-          if (side == 'front') {
-            _uploadingNICFront = true;
-          } else {
-            _uploadingNICBack = true;
-          }
-        });
-
-        final token = await _getAuthToken();
-        await _uploadService.uploadNIC(pickedFile, token, side: side);
-
-        if (mounted) {
-          setState(() {
-            if (side == 'front') {
-              _uploadingNICFront = false;
-            } else {
-              _uploadingNICBack = false;
-            }
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                side == 'front'
-                    ? 'NIC front photo uploaded successfully!'
-                    : 'NIC back photo uploaded successfully!',
-              ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          if (side == 'front') {
-            _uploadingNICFront = false;
-          } else {
-            _uploadingNICBack = false;
-          }
-        });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to upload: $e')));
-      }
-    }
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  /// pick a single police certificate (pdf/image) and optionally upload
-  Future<void> _pickAndUploadPoliceCertificates() async {
-    try {
-      setState(() => _uploadingPolice = true);
+  void _handleNext() {
+    if (!_validateFields()) return;
 
-      // use upload service which already handles a single document
-      final picked = await _uploadService.pickDocument();
-      if (picked != null) {
-        setState(() => _policeCertFile = picked);
-        // optional: upload immediately
-        // final token = await _getAuthToken();
-        // await _uploadService.uploadDocument(picked, token);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Certificate selected successfully!')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to pick file: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _uploadingPolice = false);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.phoneNumber == null) {
+      _showError('Auth session error. Please login again.');
+      return;
     }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SelectCategoryScreen(
+          name: nameCtrl.text.trim(),
+          phone: user.phoneNumber!,
+          profilePhoto: _profilePhoto!,
+          nicFront: _nicFrontFile!,
+          nicBack: _nicBackFile!,
+          policeReport: _policeCertFile!,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/verified',
-                (route) => false,
-              );
-            }
-          },
-        ),
-      ),
+      appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(18),
@@ -215,162 +170,91 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const AppHeader(title: "Create Your Profile"),
-              const SizedBox(height: 20),
-
-              /// 🔵 EMPTY PROFILE CIRCLE (same as prototype)
+              const SizedBox(height: 30),
               Center(
                 child: GestureDetector(
-                  onTap: _uploadingProfile ? null : _pickAndUploadProfile,
+                  onTap: () => _pickFile('profile'),
                   child: Column(
                     children: [
-                      Container(
-                        height: 110,
-                        width: 110,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.black26),
-                        ),
-                        child: _uploadingProfile
-                            ? const CircularProgressIndicator()
-                            : const Icon(
-                                Icons.person,
-                                size: 50,
-                                color: Colors.black38,
-                              ),
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundColor: const Color(0xFFF0F4FF),
+                            backgroundImage: _profilePhoto != null && _profilePhoto!.bytes != null
+                                ? MemoryImage(_profilePhoto!.bytes!)
+                                : null,
+                            child: _profilePhoto == null
+                                ? const Icon(
+                                    Icons.person,
+                                    size: 50,
+                                    color: Color(0xFF2563EB),
+                                  )
+                                : null,
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF2563EB),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Text(
-                        _uploadingProfile
-                            ? "Uploading..."
-                            : "Upload Profile Photo",
+                        _profilePhoto != null ? "Change Photo" : "Upload Profile Photo",
                         style: const TextStyle(
                           color: Color(0xFF2563EB),
                           fontWeight: FontWeight.w600,
+                          fontSize: 14,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              const SizedBox(height: 20),
-
+              const SizedBox(height: 25),
               InputField(label: "Full Name", controller: nameCtrl),
               const SizedBox(height: 12),
-
               InputField(
                 label: "Age",
                 controller: ageCtrl,
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 12),
-
               InputField(label: "NIC Number", controller: nicCtrl),
-              const SizedBox(height: 12),
-
-              uploadBox(
-                "Upload NIC Front Photo (JPG/PNG)",
-                _uploadingNICFront,
-                () => _pickAndUploadNIC('front'),
-              ),
-              const SizedBox(height: 12),
-
-              uploadBox(
-                "Upload NIC Back Photo (JPG/PNG)",
-                _uploadingNICBack,
-                () => _pickAndUploadNIC('back'),
-              ),
-              const SizedBox(height: 12),
-
-              // police certificate section
-              uploadBox(
-                "Police Character Certificate (PDF/JPG/PNG)",
-                _uploadingPolice,
-                _pickAndUploadPoliceCertificates,
-              ),
-              const SizedBox(height: 8),
-              if (_policeCertFile != null) ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7F9FF),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.insert_drive_file,
-                        color: Color(0xFF2563EB),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(_policeCertFile!.name)),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() => _policeCertFile = null);
-                        },
-                        child: const Icon(Icons.delete, size: 18),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
+              const SizedBox(height: 20),
               const Text(
-                "Your Location",
-                style: TextStyle(fontWeight: FontWeight.w700),
+                "Required Documents",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
-
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.black12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.my_location, color: Color(0xFF2563EB)),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text("Use your current location"),
-                        ),
-                        Switch(value: true, onChanged: (_) {}),
-                      ],
-                    ),
-                    const Divider(),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.edit_location_alt,
-                          color: Color(0xFF2563EB),
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text("Or enter address manually"),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text("Enter"),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 10),
+              uploadBox(
+                "NIC Front Photo",
+                _nicFrontFile,
+                () => _pickFile('front'),
               ),
-
-              const SizedBox(height: 18),
-
-              PrimaryButton(
-                text: "Save and Continue",
-                onPressed: () => Navigator.pushNamed(context, '/category'),
+              const SizedBox(height: 12),
+              uploadBox(
+                "NIC Back Photo",
+                _nicBackFile,
+                () => _pickFile('back'),
               ),
+              const SizedBox(height: 12),
+              uploadBox(
+                "Police Character Certificate",
+                _policeCertFile,
+                () => _pickFile('police'),
+              ),
+              const SizedBox(height: 30),
+              PrimaryButton(text: "Next Step", onPressed: _handleNext),
             ],
           ),
         ),
