@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 
+// Ensure these paths match your folder structure exactly
 import '../widgets/app_header.dart';
 import '../widgets/primary_button.dart';
 import '../services/upload_service.dart';
@@ -11,6 +12,8 @@ import '../services/upload_service.dart';
 class SelectCategoryScreen extends StatefulWidget {
   final String name;
   final String phone;
+  final String birthDate; // Updated field
+  final String language;
   final PlatformFile profilePhoto;
   final PlatformFile nicFront;
   final PlatformFile nicBack;
@@ -20,6 +23,8 @@ class SelectCategoryScreen extends StatefulWidget {
     super.key,
     required this.name,
     required this.phone,
+    required this.birthDate, // Updated here
+    required this.language,
     required this.profilePhoto,
     required this.nicFront,
     required this.nicBack,
@@ -31,116 +36,62 @@ class SelectCategoryScreen extends StatefulWidget {
 }
 
 class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
-  String selected = "Plumber";
-  final categories = const [
-    "Plumber",
-    "Electrician",
-    "Gardener",
-    "Carpenter",
-    "Painter",
-    "AC Tech",
-    "ELV Repair",
+  String selectedCategory = "Plumber";
+  final List<String> categories = const [
+    "Plumber", "Electrician", "Gardener", 
+    "Carpenter", "Painter", "AC Tech"
   ];
 
-  List<PlatformFile> _certFiles = [];
+  final List<PlatformFile> _certFiles = []; // Changed to final as per lint warning
   bool _isSaving = false;
   String _loadingMessage = "";
 
-  Widget categoryTile(String name) {
-    final isSelected = selected == name;
-    return GestureDetector(
-      onTap: () => setState(() => selected = name),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE8F0FF) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF2563EB) : Colors.black12,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.handyman,
-              color: isSelected ? const Color(0xFF2563EB) : Colors.black45,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-                color: isSelected ? const Color(0xFF2563EB) : Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickDocuments() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-        withData: true,
-      );
-
-      if (result != null) {
-        setState(() {
-          _certFiles.addAll(result.files);
-        });
-      }
-    } catch (e) {
-      _showError("Failed to pick documents: $e");
-    }
-  }
-
   Future<void> _handleSaveProfile() async {
+    // Validation: Check if certificates are uploaded
+    if (_certFiles.isEmpty) {
+      _showError("Please upload at least one professional certificate.");
+      return;
+    }
+
     setState(() {
       _isSaving = true;
-      _loadingMessage = "Getting location...";
+      _loadingMessage = "Fetching your location...";
     });
 
     try {
-      // 1. Get Location
+      // 1. Get Location with updated settings to avoid deprecation warning
       Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
 
       final uploadService = UploadService();
 
-      // 2. Upload Files to Cloudinary
-      setState(() => _loadingMessage = "Uploading Profile Photo...");
+      // 2. Upload Mandatory Identity Documents
+      setState(() => _loadingMessage = "Uploading profile & identity docs...");
       String? profileUrl = await uploadService.uploadToCloudinary(widget.profilePhoto);
-
-      setState(() => _loadingMessage = "Uploading NIC Front...");
       String? nicFrontUrl = await uploadService.uploadToCloudinary(widget.nicFront);
-
-      setState(() => _loadingMessage = "Uploading NIC Back...");
       String? nicBackUrl = await uploadService.uploadToCloudinary(widget.nicBack);
-
-      setState(() => _loadingMessage = "Uploading Police Report...");
       String? policeUrl = await uploadService.uploadToCloudinary(widget.policeReport);
 
+      // 3. Upload Multiple Certificates
       List<String> certUrls = [];
       for (int i = 0; i < _certFiles.length; i++) {
-        setState(() => _loadingMessage = "Uploading Certificate ${i + 1}...");
+        setState(() => _loadingMessage = "Uploading certificate ${i + 1} of ${_certFiles.length}...");
         String? url = await uploadService.uploadToCloudinary(_certFiles[i]);
         if (url != null) certUrls.add(url);
       }
 
-      // 3. Save to Firestore
-      setState(() => _loadingMessage = "Saving Profile...");
+      // 4. Save Worker Data to Firestore
+      setState(() => _loadingMessage = "Finalizing your profile...");
       final uid = FirebaseAuth.instance.currentUser!.uid;
+      final workerRef = FirebaseFirestore.instance.collection('workers').doc(uid);
 
-      await FirebaseFirestore.instance.collection('workers').doc(uid).set({
+      await workerRef.set({
         'name': widget.name,
         'phoneNumber': widget.phone,
-        'category': selected,
+        'dob': widget.birthDate, // Added Date of Birth
+        'language': widget.language,
+        'category': selectedCategory,
         'location': GeoPoint(position.latitude, position.longitude),
         'profileUrl': profileUrl,
         'nicFrontUrl': nicFrontUrl,
@@ -148,26 +99,35 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
         'policeReportUrl': policeUrl,
         'certificates': certUrls,
         'ratingCount': 0,
-        'totalRatingSum': 0.0,
         'averageRating': 0.0,
-        'verificationStatus': 'pending', // මුලින්ම pending status එක යනවා
+        'verificationStatus': 'pending',
         'isOnline': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) {
-        // 🔵 වැදගත්: දැන් කෙලින්ම යන්නේ Pending screen එකටයි
-        Navigator.pushNamedAndRemoveUntil(context, '/pending', (route) => false);
-      }
+      // 5. Initialize Reviews
+      await workerRef.collection('reviews').add({
+        'reviewerName': 'System',
+        'rating': 5,
+        'comment': 'Welcome to the platform! Your profile is pending verification.',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return; // Async check
+      Navigator.pushNamedAndRemoveUntil(context, '/pending', (route) => false);
+
     } catch (e) {
-      _showError("Error saving profile: ${e.toString()}");
+      if (!mounted) return;
+      _showError("Failed to save profile: ${e.toString()}");
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent)
+    );
   }
 
   @override
@@ -175,119 +135,155 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        backgroundColor: Colors.white, 
+        elevation: 0, 
+        iconTheme: const IconThemeData(color: Colors.black)
       ),
-      body: _isSaving
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(color: Color(0xFF2563EB)),
-                  const SizedBox(height: 20),
-                  Text(_loadingMessage, style: const TextStyle(fontWeight: FontWeight.bold)),
-                ],
-              ),
-            )
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const AppHeader(title: "Complete Your Profile"),
-                    const SizedBox(height: 10),
-                    const Text(
-                      "Select your service category and upload any professional certificates.",
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 25),
-                    const Text(
-                      "Select your service category",
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 12),
-                    GridView.count(
-                      crossAxisCount: 3,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      children: categories.map(categoryTile).toList(),
-                    ),
-                    const SizedBox(height: 25),
-                    const Text(
-                      "Professional Certifications",
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildUploadBox(),
-                    const SizedBox(height: 30),
-                    PrimaryButton(
-                      text: "Save & Finish",
-                      onPressed: _handleSaveProfile,
-                    ),
-                  ],
-                ),
-              ),
+      body: _isSaving ? _buildLoadingState() : _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const AppHeader(title: "Complete Profile"),
+            const SizedBox(height: 10),
+            const Text(
+              "Select your primary service and upload certificates.", 
+              style: TextStyle(color: Colors.black54, fontSize: 13)
             ),
+            const SizedBox(height: 25),
+            const Text("Service Category", style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            _buildCategoryGrid(),
+            const SizedBox(height: 30),
+            _buildCertificateHeader(),
+            const SizedBox(height: 10),
+            _buildUploadBox(),
+            if (_certFiles.isNotEmpty) ...[
+              const SizedBox(height: 15),
+              ..._certFiles.map((file) => _filePreviewTile(file)),
+            ],
+            const SizedBox(height: 40),
+            PrimaryButton(text: "Save & Finish", onPressed: _handleSaveProfile),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryGrid() {
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      children: categories.map((c) => _categoryTile(c)).toList(),
+    );
+  }
+
+  Widget _buildCertificateHeader() {
+    return const Row(
+      children: [
+        Text("Professional Certificates", style: TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(width: 4),
+        Text("*", style: TextStyle(color: Colors.red)),
+      ],
+    );
+  }
+
+  Widget _categoryTile(String name) {
+    final bool isSelected = selectedCategory == name;
+    return GestureDetector(
+      onTap: () => setState(() => selectedCategory = name),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFE8F0FF) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? const Color(0xFF2563EB) : Colors.black12),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.construction, color: isSelected ? const Color(0xFF2563EB) : Colors.black38),
+            const SizedBox(height: 5),
+            Text(
+              name, 
+              style: TextStyle(
+                fontSize: 11, 
+                fontWeight: FontWeight.bold, 
+                color: isSelected ? const Color(0xFF2563EB) : Colors.black87
+              )
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildUploadBox() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.black12),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: _pickDocuments,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: const Color(0xFFF7F9FF),
-                border: Border.all(color: Colors.black12, style: BorderStyle.solid),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.cloud_upload, size: 28, color: Color(0xFF2563EB)),
-                  SizedBox(height: 6),
-                  Text("Click to upload documents", style: TextStyle(fontWeight: FontWeight.w600)),
-                  Text("Certificates, Diplomas (PDF, JPG)", style: TextStyle(fontSize: 12, color: Colors.black45)),
-                ],
-              ),
-            ),
-          ),
-          if (_certFiles.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ..._certFiles.map((file) => Container(
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.description, color: Color(0xFF2563EB), size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(file.name, style: const TextStyle(fontSize: 13))),
-                      GestureDetector(
-                        onTap: () => setState(() => _certFiles.remove(file)),
-                        child: const Icon(Icons.close, size: 18, color: Colors.red),
-                      ),
-                    ],
-                  ),
-                )),
+    return GestureDetector(
+      onTap: () async {
+        FilePickerResult? result = await FilePicker.platform.pickFiles(
+          allowMultiple: true,
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
+          withData: true,
+        );
+        if (result != null) setState(() => _certFiles.addAll(result.files));
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: const Column(
+          children: [
+            Icon(Icons.upload_file_outlined, color: Color(0xFF2563EB), size: 30),
+            SizedBox(height: 8),
+            Text("Click to upload documents", style: TextStyle(fontWeight: FontWeight.w600)),
+            Text("NVQ, Diploma, or Training Certs", style: TextStyle(fontSize: 12, color: Colors.black45)),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filePreviewTile(PlatformFile file) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(border: Border.all(color: Colors.black12), borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        children: [
+          const Icon(Icons.description, size: 20, color: Color(0xFF2563EB)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(file.name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+            onPressed: () => setState(() => _certFiles.remove(file)),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(color: Color(0xFF2563EB)),
+          const SizedBox(height: 20),
+          Text(_loadingMessage, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
         ],
       ),
     );
