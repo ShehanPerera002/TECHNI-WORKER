@@ -47,11 +47,11 @@ Keep the screen responsive.
 */
 
 import 'package:flutter/material.dart';
-
 import 'earnings_details_screen.dart';
 import 'job_details_screen.dart';
 import '../../models/job_model.dart';
 import '../job_service.dart';
+import '../location_service.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -73,6 +73,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     super.initState();
     newJobs = jobService.getNewJobs();
     scheduledJobs = jobService.getScheduledJobs();
+    LocationService.instance.startSharing();
+  }
+
+  @override
+  void dispose() {
+    LocationService.instance.stopSharing();
+    super.dispose();
   }
 
   @override

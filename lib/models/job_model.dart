@@ -9,6 +9,8 @@ class Job {
   final double rating;
   final String urgency;
   final DateTime? completedAt;
+  final double customerLat;
+  final double customerLng;
 
   String status;
 
@@ -24,5 +26,7 @@ class Job {
     required this.urgency,
     this.status = "pending",
     this.completedAt,
+    this.customerLat = 6.9271,
+    this.customerLng = 79.8612,
   });
 }
