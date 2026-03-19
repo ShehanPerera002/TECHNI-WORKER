@@ -10,10 +10,10 @@ class WorkerOnTheWayScreen extends StatefulWidget {
   final LatLng customerLocation; // Where the customer is waiting
 
   const WorkerOnTheWayScreen({
-    Key? key,
+    super.key,
     required this.workerId,
     required this.customerLocation,
-  }) : super(key: key);
+  });
 
   @override
   State<WorkerOnTheWayScreen> createState() => _WorkerOnTheWayScreenState();
@@ -42,7 +42,7 @@ class _WorkerOnTheWayScreenState extends State<WorkerOnTheWayScreen> {
         .listen((doc) {
       
       if (!doc.exists) return;
-      final data = doc.data() as Map<String, dynamic>?;
+      final data = doc.data();
       if (data == null) return;
 
       final lat = data['lat'];
@@ -90,7 +90,6 @@ class _WorkerOnTheWayScreenState extends State<WorkerOnTheWayScreen> {
 
   /// Queries Google Directions API to draw the physical route between worker and customer
   Future<void> _getPolyline(LatLng workerLocation) async {
-    PolylinePoints polylinePoints = PolylinePoints();
     String apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
 
     if (apiKey.isEmpty) {
@@ -98,15 +97,18 @@ class _WorkerOnTheWayScreenState extends State<WorkerOnTheWayScreen> {
       return;
     }
 
+    // flutter_polyline_points v3+: apiKey is passed to the constructor as a named argument
+    PolylinePoints polylinePoints = PolylinePoints(apiKey: apiKey);
+
     try {
-      PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
-        googleApiKey: apiKey,
-        request: PolylineRequest(
+      final response = await polylinePoints.getRouteBetweenCoordinatesV2(
+        request: RoutesApiRequest(
           origin: PointLatLng(workerLocation.latitude, workerLocation.longitude),
           destination: PointLatLng(widget.customerLocation.latitude, widget.customerLocation.longitude),
-          mode: TravelMode.driving,
+          travelMode: TravelMode.driving,
         ),
       );
+      PolylineResult result = polylinePoints.convertToLegacyResult(response);
 
       if (result.points.isNotEmpty) {
         List<LatLng> polylineCoordinates = [];

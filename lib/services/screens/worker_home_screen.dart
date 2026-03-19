@@ -46,6 +46,7 @@ Do not break existing navigation routes.
 Keep the screen responsive.
 */
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -68,11 +69,26 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   bool _isDndActive = false;
 
   final JobService jobService = JobService();
+  
+  List<Job> _newJobs = [];
+  List<Job> _scheduledJobs = [];
+  StreamSubscription<List<Job>>? _newJobsSub;
+  StreamSubscription<List<Job>>? _scheduledJobsSub;
 
   @override
   void initState() {
     super.initState();
     _loadDndStatus();
+    _subscribeToJobs();
+  }
+
+  void _subscribeToJobs() {
+    _newJobsSub = jobService.streamNewJobs().listen((jobs) {
+      if (mounted) setState(() => _newJobs = jobs);
+    });
+    _scheduledJobsSub = jobService.streamScheduledJobs().listen((jobs) {
+      if (mounted) setState(() => _scheduledJobs = jobs);
+    });
   }
 
   Future<void> _loadDndStatus() async {
@@ -110,6 +126,8 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
 
   @override
   void dispose() {
+    _newJobsSub?.cancel();
+    _scheduledJobsSub?.cancel();
     super.dispose();
   }
 
@@ -150,7 +168,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               Switch(
                 value: _isDndActive,
                 onChanged: _toggleDnd,
-                activeColor: Colors.red,
+                activeThumbColor: Colors.red,
               ),
             ],
           ),
@@ -164,16 +182,16 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          newJobs.isEmpty
+                          _newJobs.isEmpty
                               ? 'No new notifications'
-                              : '${newJobs.length} new job request notifications',
+                              : '${_newJobs.length} new job request notifications',
                         ),
                       ),
                     );
                   },
                   icon: const Icon(Icons.notifications_none),
                 ),
-                if (newJobs.isNotEmpty)
+                if (_newJobs.isNotEmpty)
                   Positioned(
                     right: 10,
                     top: 10,
@@ -199,29 +217,12 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             children: [
               _earningsCard(context),
               const SizedBox(height: 14),
-              // StreamBuilder for new (pending) jobs
-              StreamBuilder<List<Job>>(
-                stream: jobService.streamNewJobs(),
-                builder: (context, newSnap) {
-                  final newJobs = newSnap.data ?? [];
-                  return StreamBuilder<List<Job>>(
-                    stream: jobService.streamScheduledJobs(),
-                    builder: (context, schedSnap) {
-                      final scheduledJobs = schedSnap.data ?? [];
-                      return Column(
-                        children: [
-                          _tabs(newJobs.length),
-                          const SizedBox(height: 14),
-                          if (tabIndex == 0)
-                            _jobsSection(jobs: newJobs, isNewJobs: true)
-                          else
-                            _jobsSection(jobs: scheduledJobs, isNewJobs: false),
-                        ],
-                      );
-                    },
-                  );
-                },
-              ),
+              _tabs(_newJobs.length),
+              const SizedBox(height: 14),
+              if (tabIndex == 0)
+                _jobsSection(jobs: _newJobs, isNewJobs: true)
+              else
+                _jobsSection(jobs: _scheduledJobs, isNewJobs: false),
             ],
           ),
         ),

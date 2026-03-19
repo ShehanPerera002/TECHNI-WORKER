@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 
 class LocationService {
   static final LocationService instance = LocationService._();
@@ -60,12 +61,18 @@ class LocationService {
     _positionSub = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen((Position pos) {
-          FirebaseFirestore.instance.collection('workers').doc(workerId).set({
-            'lat': pos.latitude,
-            'lng': pos.longitude,
-            'isOnline': true,
-          }, SetOptions(merge: true));
-        });
+      // Build a GeoFirePoint — this generates the GeoHash + GeoPoint in one call
+      final geoPoint = GeoFirePoint(GeoPoint(pos.latitude, pos.longitude));
+
+      FirebaseFirestore.instance.collection('workers').doc(workerId).set({
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'isOnline': true,
+        // 'position' stores {geopoint: GeoPoint, geohash: String}
+        // This is the field GeoCollectionReference.subscribeWithin() queries on
+        'position': geoPoint.data,
+      }, SetOptions(merge: true));
+    });
   }
 
   Future<void> stopSharing() async {
