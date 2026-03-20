@@ -46,12 +46,16 @@ Do not break existing navigation routes.
 Keep the screen responsive.
 */
 
+import 'dart:async';
 import 'package:flutter/material.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'earnings_details_screen.dart';
 import 'job_details_screen.dart';
-import '../../models/job_model.dart';
+import 'worker_navigation_screen.dart';
+import '../../models/job_request.dart';
 import '../job_service.dart';
+import '../location_service.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -63,16 +67,119 @@ class WorkerHomeScreen extends StatefulWidget {
 class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   int tabIndex = 0;
   final double weekEarnings = 5000.00;
+  bool _isDndActive = false;
 
   final JobService jobService = JobService();
-  late List<Job> newJobs;
-  late List<Job> scheduledJobs;
+  
+  List<JobRequest> _newJobs = [];
+  List<JobRequest> _scheduledJobs = [];
+  StreamSubscription<List<JobRequest>>? _newJobsSub;
+  StreamSubscription<List<JobRequest>>? _scheduledJobsSub;
+  StreamSubscription<QuerySnapshot>? _confirmedJobSub;
+  bool _hasNavigatedToJob = false;
 
   @override
   void initState() {
     super.initState();
-    newJobs = jobService.getNewJobs();
-    scheduledJobs = jobService.getScheduledJobs();
+    _loadDndStatus();
+    _subscribeToJobs();
+    _listenForConfirmedJobs();
+  }
+
+  void _subscribeToJobs() {
+    _newJobsSub = jobService.streamNewJobs().listen((jobs) {
+      if (mounted) setState(() => _newJobs = jobs);
+    });
+    _scheduledJobsSub = jobService.streamScheduledJobs().listen((jobs) {
+      if (mounted) setState(() => _scheduledJobs = jobs);
+    });
+  }
+
+  /// Listens for jobs where the customer has confirmed this worker.
+  /// When detected, auto-navigates to the WorkerNavigationScreen.
+  void _listenForConfirmedJobs() {
+    final workerId = FirebaseAuth.instance.currentUser?.uid;
+    if (workerId == null) return;
+
+    _confirmedJobSub?.cancel();
+    _confirmedJobSub = FirebaseFirestore.instance
+        .collection('jobRequests')
+        .where('status', isEqualTo: 'customerConfirmed')
+        .where('workerId', isEqualTo: workerId)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.docs.isNotEmpty && !_hasNavigatedToJob && mounted) {
+        final doc = snapshot.docs.first;
+        final job = JobRequest.fromFirestore(doc);
+        _hasNavigatedToJob = true;
+
+        // Start location sharing and navigate to navigation screen
+        LocationService.instance.startNavigationTracking();
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkerNavigationScreen(job: job),
+          ),
+        ).then((_) {
+          // Reset flag when returning from navigation screen
+          _hasNavigatedToJob = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _loadDndStatus() async {
+    final workerId = FirebaseAuth.instance.currentUser?.uid;
+    if (workerId == null) return;
+    
+    try {
+      final doc = await FirebaseFirestore.instance.collection('workers').doc(workerId).get();
+      if (doc.exists && doc.data() != null) {
+        final isDnd = doc.data()!['doNotDisturb'] ?? false;
+        final isAvailable = doc.data()!['isAvailable'];
+        
+        setState(() {
+          _isDndActive = isDnd;
+        });
+
+        // Ensure isAvailable matches DND status if unset or incorrectly set
+        if (isAvailable != !isDnd) {
+           _toggleDnd(isDnd);
+        }
+      } else {
+        _toggleDnd(false);
+      }
+    } catch (e) {
+      debugPrint('Error loading DND status: $e');
+    }
+  }
+
+  Future<void> _toggleDnd(bool value) async {
+    setState(() {
+      _isDndActive = value;
+    });
+
+    final workerId = FirebaseAuth.instance.currentUser?.uid;
+    if (workerId == null) return;
+    
+    try {
+      await FirebaseFirestore.instance.collection('workers').doc(workerId).set({
+        'doNotDisturb': value,
+        'isAvailable': !value,
+        'fcmToken': 'dummy-token', // Prevent null errors if not initialized previously
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error setting DND status: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _newJobsSub?.cancel();
+    _scheduledJobsSub?.cancel();
+    _confirmedJobSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -86,6 +193,23 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         title: const Text('Worker home screen'),
         centerTitle: false,
         actions: [
+          Row(
+            children: [
+              Text(
+                'DND',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: _isDndActive ? Colors.red : Colors.black45,
+                ),
+              ),
+              Switch(
+                value: _isDndActive,
+                onChanged: _toggleDnd,
+                activeThumbColor: Colors.red,
+              ),
+            ],
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Stack(
@@ -96,16 +220,16 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          newJobs.isEmpty
+                          _newJobs.isEmpty
                               ? 'No new notifications'
-                              : '${newJobs.length} new job request notifications',
+                              : '${_newJobs.length} new job request notifications',
                         ),
                       ),
                     );
                   },
                   icon: const Icon(Icons.notifications_none),
                 ),
-                if (newJobs.isNotEmpty)
+                if (_newJobs.isNotEmpty)
                   Positioned(
                     right: 10,
                     top: 10,
@@ -131,12 +255,12 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             children: [
               _earningsCard(context),
               const SizedBox(height: 14),
-              _tabs(),
+              _tabs(_newJobs.length),
               const SizedBox(height: 14),
               if (tabIndex == 0)
-                _jobsSection(jobs: newJobs, isNewJobs: true)
+                _jobsSection(jobs: _newJobs, isNewJobs: true)
               else
-                _jobsSection(jobs: scheduledJobs, isNewJobs: false),
+                _jobsSection(jobs: _scheduledJobs, isNewJobs: false),
             ],
           ),
         ),
@@ -144,12 +268,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
+  // Pull-to-refresh just forces the stream to re-evaluate (streams auto-update, nothing needed)
   Future<void> _refreshJobs() async {
     await Future<void>.delayed(const Duration(milliseconds: 350));
-    setState(() {
-      newJobs = jobService.getNewJobs();
-      scheduledJobs = jobService.getScheduledJobs();
-    });
   }
 
   /*
@@ -260,14 +381,14 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  Widget _tabs() {
+  Widget _tabs(int newJobCount) {
     return Row(
       children: [
         Expanded(
           child: _tabButton(
             'New Job Requests',
             tabIndex == 0,
-            badge: newJobs.length,
+            badge: newJobCount,
           ),
         ),
         const SizedBox(width: 10),
@@ -327,7 +448,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  Widget _jobsSection({required List<Job> jobs, required bool isNewJobs}) {
+  Widget _jobsSection({required List<JobRequest> jobs, required bool isNewJobs}) {
     if (jobs.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -365,10 +486,8 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               _jobRequestCard(job),
               const SizedBox(height: 12),
               _jobInformation(job),
-              if (isNewJobs) ...[
-                const SizedBox(height: 12),
-                _actionButtons(job),
-              ],
+              const SizedBox(height: 12),
+              _actionButtons(job, isNewJobs),
             ],
           ),
         );
@@ -376,7 +495,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  Widget _jobRequestCard(Job job) {
+  Widget _jobRequestCard(JobRequest job) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -409,17 +528,15 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${job.category} • ${job.urgency}',
+                      '${job.jobType} • Normal',
                       style: TextStyle(
-                        color: job.urgency == 'Emergency'
-                            ? Colors.red
-                            : const Color(0xFF2563EB),
+                        color: const Color(0xFF2563EB),
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      job.title,
+                      '${job.jobType} Request',
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
@@ -427,7 +544,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${job.distance.toStringAsFixed(1)} km away  •  Est. Rs. ${job.estimatedPrice.toStringAsFixed(0)}',
+                      '2.5 km away  •  Est. Rs. ${job.fare?.toStringAsFixed(0) ?? '0'}',
                       style: const TextStyle(color: Colors.black54),
                     ),
                     const SizedBox(height: 8),
@@ -437,10 +554,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                           'Customer Rating: ',
                           style: TextStyle(color: Colors.black54),
                         ),
-                        ..._buildStars(job.rating),
+                        ..._buildStars(4.5),
                         const SizedBox(width: 4),
                         Text(
-                          job.rating.toStringAsFixed(1),
+                          '4.5',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ],
@@ -482,7 +599,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     return stars;
   }
 
-  Widget _jobInformation(Job job) {
+  Widget _jobInformation(JobRequest job) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -513,7 +630,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      job.description,
+                      job.description ?? 'No description provided',
                       style: const TextStyle(color: Colors.black54),
                     ),
                   ],
@@ -537,7 +654,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      job.address,
+                      'Customer Location Map Pin',
                       style: const TextStyle(color: Colors.black54),
                     ),
                   ],
@@ -569,62 +686,86 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  Widget _actionButtons(Job job) {
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 44,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+  Widget _actionButtons(JobRequest job, bool isNewJobs) {
+    if (isNewJobs) {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-              ),
-              onPressed: () {
-                jobService.acceptJob(job.id);
-
-                setState(() {
-                  newJobs = jobService.getNewJobs();
-                  scheduledJobs = jobService.getScheduledJobs();
-                });
-              },
-              child: const Text(
-                'Accept',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                onPressed: () async {
+                  await jobService.acceptJob(job.id);
+                  LocationService.instance.startSharing();
+                  // Stream auto-updates UI — no setState needed
+                },
+                child: const Text(
+                  'Accept',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: SizedBox(
-            height: 44,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.black87,
-                side: const BorderSide(color: Colors.black26),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black87,
+                  side: const BorderSide(color: Colors.black26),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-              ),
-              onPressed: () {
-                jobService.declineJob(job.id);
-
-                setState(() {
-                  newJobs = jobService.getNewJobs();
-                });
-              },
-              child: const Text(
-                'Decline',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                onPressed: () async {
+                  await jobService.declineJob(job.id);
+                  // Stream auto-updates UI — no setState needed
+                },
+                child: const Text(
+                  'Decline',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    } else {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () async {
+                  await jobService.completeJob(job.id);
+                  LocationService.instance.stopSharing();
+                  // Stream auto-updates UI — no setState needed
+                },
+                child: const Text(
+                  'Complete Job',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
   }
 }

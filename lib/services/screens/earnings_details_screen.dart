@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/job_model.dart';
+import '../../models/job_request.dart';
 import '../job_service.dart';
 
 class EarningsDetailsScreen extends StatelessWidget {
@@ -8,7 +8,16 @@ class EarningsDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final completedJobs = JobService().getCompletedJobs();
+    return StreamBuilder<List<JobRequest>>(
+      stream: JobService().streamCompletedJobs(),
+      builder: (context, snapshot) {
+        final completedJobs = snapshot.data ?? [];
+        return _buildContent(context, completedJobs);
+      },
+    );
+  }
+
+  Widget _buildContent(BuildContext context, List<JobRequest> completedJobs) {
     final now = DateTime.now();
 
     final todayTotal = _sumByPeriod(
@@ -25,7 +34,7 @@ class EarningsDetailsScreen extends StatelessWidget {
     );
     final allCompletedTotal = completedJobs.fold<double>(
       0,
-      (sum, job) => sum + job.estimatedPrice,
+      (sum, job) => sum + (job.fare ?? 0.0),
     );
 
     return Scaffold(
@@ -57,9 +66,9 @@ class EarningsDetailsScreen extends StatelessWidget {
           else
             ...completedJobs.map((job) {
               return _jobTile(
-                title: job.title,
-                location: job.address,
-                price: _currency(job.estimatedPrice),
+                title: '${job.jobType} Request',
+                location: 'Customer Location',
+                price: _currency(job.fare ?? 0.0),
                 date: _dateLabel(job.completedAt),
               );
             }),
@@ -178,7 +187,7 @@ class EarningsDetailsScreen extends StatelessWidget {
   }
 
   static double _sumByPeriod({
-    required List<Job> jobs,
+    required List<JobRequest> jobs,
     required bool Function(DateTime date) predicate,
   }) {
     return jobs.fold<double>(0, (sum, job) {
@@ -186,7 +195,7 @@ class EarningsDetailsScreen extends StatelessWidget {
       if (date == null || !predicate(date)) {
         return sum;
       }
-      return sum + job.estimatedPrice;
+      return sum + (job.fare ?? 0.0);
     });
   }
 
