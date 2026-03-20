@@ -53,7 +53,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'earnings_details_screen.dart';
 import 'job_details_screen.dart';
 import 'worker_navigation_screen.dart';
-import '../../models/job_model.dart';
+import '../../models/job_request.dart';
 import '../job_service.dart';
 import '../location_service.dart';
 
@@ -71,10 +71,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
 
   final JobService jobService = JobService();
   
-  List<Job> _newJobs = [];
-  List<Job> _scheduledJobs = [];
-  StreamSubscription<List<Job>>? _newJobsSub;
-  StreamSubscription<List<Job>>? _scheduledJobsSub;
+  List<JobRequest> _newJobs = [];
+  List<JobRequest> _scheduledJobs = [];
+  StreamSubscription<List<JobRequest>>? _newJobsSub;
+  StreamSubscription<List<JobRequest>>? _scheduledJobsSub;
   StreamSubscription<QuerySnapshot>? _confirmedJobSub;
   bool _hasNavigatedToJob = false;
 
@@ -101,15 +101,16 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     final workerId = FirebaseAuth.instance.currentUser?.uid;
     if (workerId == null) return;
 
+    _confirmedJobSub?.cancel();
     _confirmedJobSub = FirebaseFirestore.instance
-        .collection('jobs')
-        .where('status', isEqualTo: 'confirmed')
+        .collection('jobRequests')
+        .where('status', isEqualTo: 'customerConfirmed')
         .where('workerId', isEqualTo: workerId)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.docs.isNotEmpty && !_hasNavigatedToJob && mounted) {
         final doc = snapshot.docs.first;
-        final job = Job.fromFirestore(doc.id, doc.data());
+        final job = JobRequest.fromFirestore(doc);
         _hasNavigatedToJob = true;
 
         // Start location sharing and navigate to navigation screen
@@ -135,9 +136,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     try {
       final doc = await FirebaseFirestore.instance.collection('workers').doc(workerId).get();
       if (doc.exists && doc.data() != null) {
+        final isDnd = doc.data()!['doNotDisturb'] ?? false;
+        final isAvailable = doc.data()!['isAvailable'];
+        
         setState(() {
-          _isDndActive = doc.data()!['doNotDisturb'] ?? false;
+          _isDndActive = isDnd;
         });
+
+        // Ensure isAvailable matches DND status if unset or incorrectly set
+        if (isAvailable != !isDnd) {
+           _toggleDnd(isDnd);
+        }
+      } else {
+        _toggleDnd(false);
       }
     } catch (e) {
       debugPrint('Error loading DND status: $e');
@@ -155,6 +166,8 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     try {
       await FirebaseFirestore.instance.collection('workers').doc(workerId).set({
         'doNotDisturb': value,
+        'isAvailable': !value,
+        'fcmToken': 'dummy-token', // Prevent null errors if not initialized previously
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Error setting DND status: $e');
@@ -435,7 +448,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  Widget _jobsSection({required List<Job> jobs, required bool isNewJobs}) {
+  Widget _jobsSection({required List<JobRequest> jobs, required bool isNewJobs}) {
     if (jobs.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -482,7 +495,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  Widget _jobRequestCard(Job job) {
+  Widget _jobRequestCard(JobRequest job) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -515,17 +528,15 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${job.category} • ${job.urgency}',
+                      '${job.jobType} • Normal',
                       style: TextStyle(
-                        color: job.urgency == 'Emergency'
-                            ? Colors.red
-                            : const Color(0xFF2563EB),
+                        color: const Color(0xFF2563EB),
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      job.title,
+                      '${job.jobType} Request',
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
@@ -533,7 +544,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${job.distance.toStringAsFixed(1)} km away  •  Est. Rs. ${job.estimatedPrice.toStringAsFixed(0)}',
+                      '2.5 km away  •  Est. Rs. ${job.fare?.toStringAsFixed(0) ?? '0'}',
                       style: const TextStyle(color: Colors.black54),
                     ),
                     const SizedBox(height: 8),
@@ -543,10 +554,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                           'Customer Rating: ',
                           style: TextStyle(color: Colors.black54),
                         ),
-                        ..._buildStars(job.rating),
+                        ..._buildStars(4.5),
                         const SizedBox(width: 4),
                         Text(
-                          job.rating.toStringAsFixed(1),
+                          '4.5',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ],
@@ -588,7 +599,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     return stars;
   }
 
-  Widget _jobInformation(Job job) {
+  Widget _jobInformation(JobRequest job) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -619,7 +630,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      job.description,
+                      job.description ?? 'No description provided',
                       style: const TextStyle(color: Colors.black54),
                     ),
                   ],
@@ -643,7 +654,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      job.address,
+                      'Customer Location Map Pin',
                       style: const TextStyle(color: Colors.black54),
                     ),
                   ],
@@ -675,7 +686,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  Widget _actionButtons(Job job, bool isNewJobs) {
+  Widget _actionButtons(JobRequest job, bool isNewJobs) {
     if (isNewJobs) {
       return Row(
         children: [
