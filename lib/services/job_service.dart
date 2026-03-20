@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/job_model.dart';
+import '../models/job_request.dart';
 
 class JobService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -11,45 +11,49 @@ class JobService {
 
   // ─── Real-time Streams ──────────────────────────────────────────────────────
 
-  /// Stream all "pending" jobs (new job requests not yet claimed by any worker).
-  Stream<List<Job>> streamNewJobs() {
+  /// Stream all "pending" jobs (new job requests where this worker is notified and status is searching).
+  Stream<List<JobRequest>> streamNewJobs() {
+    final wid = _workerId;
+    if (wid == null) return const Stream.empty();
+
     return _firestore
-        .collection('jobs')
-        .where('status', isEqualTo: 'pending')
+        .collection('jobRequests')
+        .where('notifiedWorkerIds', arrayContains: wid)
         .snapshots()
         .map((snap) => snap.docs
-            .map((doc) => Job.fromFirestore(doc.id, doc.data()))
+            .map((doc) => JobRequest.fromFirestore(doc))
+            .where((req) => req.status == 'searching' && !req.rejectedWorkerIds.contains(wid))
             .toList());
   }
 
   /// Stream jobs that have been accepted by the current logged-in worker.
-  Stream<List<Job>> streamScheduledJobs() {
+  Stream<List<JobRequest>> streamScheduledJobs() {
     final wid = _workerId;
     if (wid == null) return const Stream.empty();
 
     return _firestore
-        .collection('jobs')
-        .where('status', isEqualTo: 'accepted')
+        .collection('jobRequests')
         .where('workerId', isEqualTo: wid)
+        .where('status', whereIn: ['workerFound', 'customerConfirmed'])
         .snapshots()
         .map((snap) => snap.docs
-            .map((doc) => Job.fromFirestore(doc.id, doc.data()))
+            .map((doc) => JobRequest.fromFirestore(doc))
             .toList());
   }
 
   /// Stream jobs that have been completed by the current logged-in worker.
-  Stream<List<Job>> streamCompletedJobs() {
+  Stream<List<JobRequest>> streamCompletedJobs() {
     final wid = _workerId;
     if (wid == null) return const Stream.empty();
 
     return _firestore
-        .collection('jobs')
+        .collection('jobRequests')
         .where('status', isEqualTo: 'completed')
         .where('workerId', isEqualTo: wid)
         .orderBy('completedAt', descending: true)
         .snapshots()
         .map((snap) => snap.docs
-            .map((doc) => Job.fromFirestore(doc.id, doc.data()))
+            .map((doc) => JobRequest.fromFirestore(doc))
             .toList());
   }
 
@@ -60,24 +64,41 @@ class JobService {
     final wid = _workerId;
     if (wid == null) return;
 
-    await _firestore.collection('jobs').doc(jobId).update({
-      'status': 'accepted',
+    await _firestore.collection('jobRequests').doc(jobId).update({
+      'status': 'workerFound',
       'workerId': wid,
+      'workerAcceptedAt': FieldValue.serverTimestamp(),
+    });
+    
+    await _firestore.collection('workers').doc(wid).update({
+      'isAvailable': false,
+      'activeJobId': jobId,
     });
   }
 
-  /// Worker declines a job: status stays 'pending' (job goes back to the pool).
+  /// Worker declines a job: adds workerId to rejectedWorkerIds array.
   Future<void> declineJob(String jobId) async {
-    await _firestore.collection('jobs').doc(jobId).update({
-      'status': 'declined',
+    final wid = _workerId;
+    if (wid == null) return;
+
+    await _firestore.collection('jobRequests').doc(jobId).update({
+      'rejectedWorkerIds': FieldValue.arrayUnion([wid]),
     });
   }
 
   /// Worker completes a job: stamps completion timestamp.
   Future<void> completeJob(String jobId) async {
-    await _firestore.collection('jobs').doc(jobId).update({
+    final wid = _workerId;
+    if (wid == null) return;
+
+    await _firestore.collection('jobRequests').doc(jobId).update({
       'status': 'completed',
-      'completedAt': DateTime.now().toIso8601String(),
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+
+    await _firestore.collection('workers').doc(wid).update({
+      'isAvailable': true,
+      'activeJobId': FieldValue.delete(),
     });
   }
 }
