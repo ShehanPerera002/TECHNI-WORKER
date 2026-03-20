@@ -61,7 +61,7 @@ class MyApp extends StatelessWidget {
       theme: appTheme,
       
       // Starting point of the app
-      home: const AuthWrapper(), 
+      home: const WelcomeScreen(), 
       routes: appRoutes,
     );
   }
