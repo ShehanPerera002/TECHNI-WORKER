@@ -77,7 +77,7 @@ class LocationService {
   }
 
   /// High-frequency tracking for active navigation (10m filter, 5s interval)
-  Future<void> startNavigationTracking() async {
+  Future<void> startNavigationTracking({String? jobId}) async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -132,6 +132,18 @@ class LocationService {
         'isOnline': true,
         'position': geoPoint.data,
       }, SetOptions(merge: true));
+
+      if (jobId != null) {
+        FirebaseFirestore.instance.collection('liveLocations').doc(jobId).set({
+          'jobRequestId': jobId,
+          'workerId': workerId,
+          'latitude': pos.latitude,
+          'longitude': pos.longitude,
+          'heading': pos.heading,
+          'speed': pos.speed,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
     });
   }
 
