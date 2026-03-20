@@ -1,11 +1,13 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-import '../auth_service.dart';
-import '../../widgets/app_header.dart';
-import '../../widgets/primary_button.dart';
+
+import '../auth_service.dart';            // lib/services/auth_service.dart
+import '../../widgets/app_header.dart';     // lib/widgets/app_header.dart
+import '../../widgets/primary_button.dart'; // lib/widgets/primary_button.dart
 
 class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({super.key});
@@ -40,6 +42,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   @override
   void dispose() {
+    // curly_braces_in_flow_control_structures fix
     for (final c in otpCtrls) {
       c.dispose();
     }
@@ -51,7 +54,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   void _handleOtpChanged(int index, String value) {
     if (value.isNotEmpty) {
-      // Keep only one digit per box and move forward.
       final digit = value.substring(value.length - 1);
       if (otpCtrls[index].text != digit) {
         otpCtrls[index].text = digit;
@@ -68,7 +70,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       return;
     }
 
-    // Backspace flow: when box becomes empty, move to previous box.
     if (index > 0) {
       FocusScope.of(context).requestFocus(otpFocusNodes[index - 1]);
     }
@@ -88,25 +89,36 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
 
     try {
-      await _authService
-          .verifyOTP(otp)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw TimeoutException('Verification timeout. Please try again.');
-            },
-          );
+      await _authService.verifyOTP(otp).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Verification timeout. Please try again.');
+        },
+      );
 
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Verification successful!')),
-        );
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          '/verified',
-          (route) => false,
-        );
+      final user = FirebaseAuth.instance.currentUser;
+
+      // use_build_context_synchronously fix - check mounted
+      if (!mounted) return;
+
+      if (user != null) {
+        DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(user.uid)
+            .get();
+
+        if (!mounted) return;
+
+        if (workerDoc.exists) {
+          String status = workerDoc.get('verificationStatus') ?? 'pending';
+          if (status == 'verified') {
+            Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+          } else {
+            Navigator.pushNamedAndRemoveUntil(context, '/pending', (route) => false);
+          }
+        } else {
+          Navigator.pushNamedAndRemoveUntil(context, '/verified', (route) => false);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -120,22 +132,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   Future<void> _resendOTP() async {
     if (_phoneNumber == null) return;
-
     setState(() {
       _isResending = true;
       _error = null;
     });
 
     try {
-      await _authService
-          .resendOTP(_phoneNumber!)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw TimeoutException('Resend timeout. Please try again.');
-            },
-          );
-
+      await _authService.resendOTP(_phoneNumber!).timeout(const Duration(seconds: 30));
       if (mounted) {
         setState(() => _isResending = false);
         for (final c in otpCtrls) {
@@ -158,8 +161,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   Widget otpBox(int index) {
     return SizedBox(
-      width: 50,
-      height: 70,
+      width: 45,
+      height: 65,
       child: TextField(
         controller: otpCtrls[index],
         focusNode: otpFocusNodes[index],
@@ -168,19 +171,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         textAlign: TextAlign.center,
         maxLength: 1,
         onChanged: (value) => _handleOtpChanged(index, value),
-        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         decoration: InputDecoration(
           counterText: '',
           filled: true,
           fillColor: Colors.grey[100],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.grey),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.grey),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
@@ -195,85 +191,64 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/signin',
-                (route) => false,
-              );
-            }
-          },
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 6),
-              const SizedBox(height: 10),
               const AppHeader(title: 'Worker Verification'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 15),
               Center(
                 child: Container(
-                  height: 200,
-                  color: Colors.grey[100],
-                  child: const Icon(
-                    Icons.verified_user,
-                    size: 80,
-                    color: Colors.blue,
+                  height: 150,
+                  width: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    shape: BoxShape.circle,
                   ),
+                  child: const Icon(Icons.verified_user_rounded, size: 80, color: Colors.blue),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 25),
               const Text(
-                'A six digit code has been sent to your phone number. Please enter the code below to verify your account.',
-                style: TextStyle(color: Colors.black54),
+                'A six digit code has been sent to your phone. Enter it below to verify.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black54, height: 1.5),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 35),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: List.generate(6, (index) => otpBox(index)),
               ),
-              const SizedBox(height: 28),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    "Didn't receive the code? ",
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                  TextButton(
-                    onPressed: _isResending ? null : _resendOTP,
-                    child: Text(
-                      _isResending ? 'Resending...' : 'Resend Code',
-                      style: const TextStyle(
-                        color: Color(0xFF2563EB),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 30),
               if (_error != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red, fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
+                  padding: const EdgeInsets.only(bottom: 15),
+                  child: Center(child: Text(_error!, style: const TextStyle(color: Colors.red))),
                 ),
               PrimaryButton(
                 text: _isLoading ? 'Verifying...' : 'Verify',
                 onPressed: _isLoading ? () {} : _verifyOTP,
+              ),
+              const SizedBox(height: 15),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Didn't receive the code? ", style: TextStyle(color: Colors.black54)),
+                  TextButton(
+                    onPressed: _isResending ? null : _resendOTP,
+                    child: Text(_isResending ? 'Resending...' : 'Resend Code',
+                        style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
             ],
           ),
