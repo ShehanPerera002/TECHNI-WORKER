@@ -2,7 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../models/job_model.dart';
+import '../models/job_request.dart';
 import 'screens/worker_navigation_screen.dart';
 
 class NotificationService {
@@ -77,9 +77,9 @@ class NotificationService {
     if (jobId == null || _navigatorKey?.currentState == null) return;
 
     // Fetch the full job document from Firestore and navigate
-    FirebaseFirestore.instance.collection('jobs').doc(jobId).get().then((doc) {
+    FirebaseFirestore.instance.collection('jobRequests').doc(jobId).get().then((doc) {
       if (!doc.exists) return;
-      final job = Job.fromFirestore(doc.id, doc.data()!);
+      final job = JobRequest.fromFirestore(doc);
 
       _navigatorKey!.currentState!.push(
         MaterialPageRoute(
