@@ -1,103 +1,83 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/job_model.dart';
 
 class JobService {
-  static final List<Job> _jobs = [
-    Job(
-      id: "1",
-      title: "Leaky Pipe under Kitchen Sink",
-      category: "Plumbing",
-      description:
-          "The main pipe under the kitchen sink has a steady drip and needs quick repair.",
-      address: "No.63, 2/8 Cross Street, Athurugiriya",
-      distance: 1.0,
-      estimatedPrice: 3500,
-      rating: 4.5,
-      urgency: "Emergency",
-    ),
-    Job(
-      id: "2",
-      title: "Washing Machine Drain Leak",
-      category: "Plumbing",
-      description:
-          "Drain hose is leaking during spin cycle and water is pooling on the floor.",
-      address: "Hokandara Road, Hokandara",
-      distance: 2.6,
-      estimatedPrice: 3200,
-      rating: 4.3,
-      urgency: "Normal",
-    ),
-    Job(
-      id: "5",
-      title: "Circuit Breaker Trips Frequently",
-      category: "Electrical",
-      description:
-          "Main breaker trips when the microwave and kettle are on together.",
-      address: "Pannipitiya Main Road, Pannipitiya",
-      distance: 4.1,
-      estimatedPrice: 4100,
-      rating: 4.6,
-      urgency: "Emergency",
-    ),
-    Job(
-      id: "6",
-      title: "Bathroom Tap Replacement",
-      category: "Plumbing",
-      description: "Need to replace the old bathroom mixer tap with a new one.",
-      address: "Lake Road, Nugegoda",
-      distance: 3.2,
-      estimatedPrice: 2800,
-      rating: 4.2,
-      urgency: "Normal",
-      status: "accepted",
-    ),
-    Job(
-      id: "3",
-      title: "AC Outdoor Unit Servicing",
-      category: "HVAC",
-      description:
-          "Outdoor AC unit has reduced cooling and requires servicing.",
-      address: "Malabe Town, Malabe",
-      distance: 5.0,
-      estimatedPrice: 4500,
-      rating: 4.7,
-      urgency: "Normal",
-      status: "completed",
-      completedAt: DateTime(2026, 3, 6),
-    ),
-    Job(
-      id: "4",
-      title: "Ceiling Fan Wiring Repair",
-      category: "Electrical",
-      description: "Main bedroom ceiling fan has intermittent power issue.",
-      address: "Kottawa Junction, Kottawa",
-      distance: 4.4,
-      estimatedPrice: 2200,
-      rating: 4.4,
-      urgency: "Normal",
-      status: "completed",
-      completedAt: DateTime(2026, 3, 4),
-    ),
-  ];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  List<Job> getNewJobs() {
-    return _jobs.where((job) => job.status == "pending").toList();
+  /// Returns the current worker's UID, or null if not logged in.
+  String? get _workerId => FirebaseAuth.instance.currentUser?.uid;
+
+  // ─── Real-time Streams ──────────────────────────────────────────────────────
+
+  /// Stream all "pending" jobs (new job requests not yet claimed by any worker).
+  Stream<List<Job>> streamNewJobs() {
+    return _firestore
+        .collection('jobs')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => Job.fromFirestore(doc.id, doc.data()))
+            .toList());
   }
 
-  List<Job> getScheduledJobs() {
-    return _jobs.where((job) => job.status == "accepted").toList();
+  /// Stream jobs that have been accepted by the current logged-in worker.
+  Stream<List<Job>> streamScheduledJobs() {
+    final wid = _workerId;
+    if (wid == null) return const Stream.empty();
+
+    return _firestore
+        .collection('jobs')
+        .where('status', isEqualTo: 'accepted')
+        .where('workerId', isEqualTo: wid)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => Job.fromFirestore(doc.id, doc.data()))
+            .toList());
   }
 
-  List<Job> getCompletedJobs() {
-    return _jobs.where((job) => job.status == "completed").toList();
+  /// Stream jobs that have been completed by the current logged-in worker.
+  Stream<List<Job>> streamCompletedJobs() {
+    final wid = _workerId;
+    if (wid == null) return const Stream.empty();
+
+    return _firestore
+        .collection('jobs')
+        .where('status', isEqualTo: 'completed')
+        .where('workerId', isEqualTo: wid)
+        .orderBy('completedAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => Job.fromFirestore(doc.id, doc.data()))
+            .toList());
   }
 
-  void acceptJob(String jobId) {
-    final job = _jobs.firstWhere((j) => j.id == jobId);
-    job.status = "accepted";
+  // ─── Write Operations ────────────────────────────────────────────────────────
+
+  /// Worker accepts a job: stamps workerId and changes status.
+  Future<void> acceptJob(String jobId) async {
+    final wid = _workerId;
+    if (wid == null) return;
+
+    await _firestore.collection('jobs').doc(jobId).update({
+      'status': 'accepted',
+      'workerId': wid,
+    });
   }
 
-  void declineJob(String jobId) {
-    final job = _jobs.firstWhere((j) => j.id == jobId);
-    job.status = "declined";
+  /// Worker declines a job: status stays 'pending' (job goes back to the pool).
+  Future<void> declineJob(String jobId) async {
+    await _firestore.collection('jobs').doc(jobId).update({
+      'status': 'declined',
+    });
+  }
+
+  /// Worker completes a job: stamps completion timestamp.
+  Future<void> completeJob(String jobId) async {
+    await _firestore.collection('jobs').doc(jobId).update({
+      'status': 'completed',
+      'completedAt': DateTime.now().toIso8601String(),
+    });
   }
 }

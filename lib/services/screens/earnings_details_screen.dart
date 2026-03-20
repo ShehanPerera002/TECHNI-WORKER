@@ -8,7 +8,16 @@ class EarningsDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final completedJobs = JobService().getCompletedJobs();
+    return StreamBuilder<List<Job>>(
+      stream: JobService().streamCompletedJobs(),
+      builder: (context, snapshot) {
+        final completedJobs = snapshot.data ?? [];
+        return _buildContent(context, completedJobs);
+      },
+    );
+  }
+
+  Widget _buildContent(BuildContext context, List<Job> completedJobs) {
     final now = DateTime.now();
 
     final todayTotal = _sumByPeriod(

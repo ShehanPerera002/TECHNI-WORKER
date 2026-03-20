@@ -111,11 +111,7 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
         }
       }
 
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+      Position position = await Geolocator.getCurrentPosition();
 
       final user = FirebaseAuth.instance.currentUser;
 
