@@ -1,155 +1,89 @@
+import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http; 
 
 class UploadService {
   final ImagePicker _imagePicker = ImagePicker();
-  late final Dio _dio;
 
-  String get _baseUrl {
-    const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
-    if (configuredBaseUrl.isNotEmpty) {
-      return configuredBaseUrl;
+  
+  final String cloudName = "dg9whoifo"; 
+  final String uploadPreset = "techni";
+
+  
+  UploadService();
+
+  // ================= 1. CLOUDINARY UPLOAD LOGIC =================
+  
+  Future<String?> uploadToCloudinary(PlatformFile file) async {
+    try {
+      final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/upload');
+      
+      var request = http.MultipartRequest('POST', url);
+      
+      // Web සහ Mobile දෙකටම ගැලපෙන පරිදි bytes හෝ path භාවිතා කිරීම
+      if (kIsWeb || file.bytes != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            file.bytes!,
+            filename: file.name,
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath('file', file.path!),
+        );
+      }
+
+      request.fields['upload_preset'] = uploadPreset;
+      request.fields['resource_type'] = 'auto'; 
+
+      var response = await request.send();
+      var responseData = await response.stream.toBytes();
+      var responseString = String.fromCharCodes(responseData);
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        var jsonResponse = jsonDecode(responseString);
+        return jsonResponse['secure_url']; // Cloudinary URL එක ලබාදෙයි
+      } else {
+        debugPrint("Cloudinary Error: $responseString");
+        return null;
+      }
+    } catch (e) {
+      debugPrint("Upload Exception: $e");
+      return null;
     }
-
-    if (kIsWeb) {
-      return 'http://localhost:5000/api/workers';
-    }
-
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000/api/workers';
-    }
-
-    return 'http://localhost:5000/api/workers';
   }
 
-  UploadService() {
-    _dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-      ),
-    );
-  }
+  // ================= 2. FILE PICKER LOGIC =================
 
-  // Pick a document (PDF, DOC, image, etc)
+  
   Future<PlatformFile?> pickDocument() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        withData: true, 
       );
-      if (result != null && result.files.isNotEmpty) {
-        return result.files.first;
-      }
-      return null;
+      return result?.files.first;
     } catch (e) {
       debugPrint('Error picking document: $e');
-      rethrow;
-    }
-  }
-
-  // Upload a document file
-  Future<String?> uploadDocument(PlatformFile file, String token) async {
-    try {
-      FormData formData = FormData.fromMap({
-        'document': await MultipartFile.fromFile(
-          file.path!,
-          filename: file.name,
-        ),
-      });
-
-      final response = await _dio.post(
-        '$_baseUrl/document',
-        data: formData,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-
-      if (response.statusCode == 200) {
-        return response.data['fileUrl'];
-      }
       return null;
-    } catch (e) {
-      debugPrint('Error uploading document: $e');
-      rethrow;
     }
   }
 
+  
   Future<XFile?> pickImage() async {
     try {
-      debugPrint('Starting image picker...');
-      final XFile? pickedFile = await _imagePicker.pickImage(
+      return await _imagePicker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 85,
-        requestFullMetadata: false,
       );
-
-      if (pickedFile == null) {
-        debugPrint('No image selected');
-        return null;
-      }
-
-      debugPrint('Image picked: ${pickedFile.name}');
-      return pickedFile;
     } catch (e) {
       debugPrint('Error picking image: $e');
-      rethrow;
-    }
-  }
-
-  Future<String?> uploadProfileImage(XFile imageFile, String token) async {
-    try {
-      FormData formData = FormData.fromMap({
-        'image': await MultipartFile.fromFile(
-          imageFile.path,
-          filename: imageFile.name,
-        ),
-      });
-
-      final response = await _dio.post(
-        '$_baseUrl/profile-image',
-        data: formData,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-
-      if (response.statusCode == 200) {
-        return response.data['imageUrl'];
-      }
       return null;
-    } catch (e) {
-      debugPrint('Error uploading profile image: $e');
-      rethrow;
-    }
-  }
-
-  Future<String?> uploadNIC(
-    XFile imageFile,
-    String token, {
-    String side = 'front',
-  }) async {
-    try {
-      FormData formData = FormData.fromMap({
-        'side': side,
-        'image': await MultipartFile.fromFile(
-          imageFile.path,
-          filename: imageFile.name,
-        ),
-      });
-
-      final response = await _dio.post(
-        '$_baseUrl/nic-image',
-        data: formData,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-
-      if (response.statusCode == 200) {
-        return response.data['fileUrl'];
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error uploading NIC: $e');
-      rethrow;
     }
   }
 }

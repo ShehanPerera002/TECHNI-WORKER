@@ -42,7 +42,9 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
   }
 
   Future<void> _sendOTP() async {
-    if (phoneCtrl.text.isEmpty) {
+    String phoneNumber = phoneCtrl.text.trim();
+
+    if (phoneNumber.isEmpty) {
       setState(() => _error = 'Please enter your phone number');
       return;
     }
@@ -53,21 +55,22 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
     });
 
     try {
-      // Format phone number with country code if not present
-      String phoneNumber = phoneCtrl.text.trim();
+      // Format logic: අංකය 0න් පටන් ගත්තොත් ඒක අයින් කරලා +94 දානවා
       if (!phoneNumber.startsWith('+')) {
-        phoneNumber =
-            '+94${phoneNumber.replaceFirst('0', '')}'; // Sri Lanka code
+        if (phoneNumber.startsWith('0')) {
+          phoneNumber = '+94${phoneNumber.substring(1)}';
+        } else if (phoneNumber.length == 9) {
+          phoneNumber = '+94$phoneNumber';
+        }
       }
 
       await _authService.sendOTP(phoneNumber);
 
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('OTP sent successfully!')));
-        // Navigate to OTP verification screen
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('OTP sent successfully!')),
+        );
         Navigator.pushNamed(context, '/otp', arguments: phoneNumber);
       }
     } catch (e) {
@@ -76,9 +79,9 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
           _isLoading = false;
           _error = 'Error: ${e.toString()}';
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to send OTP: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send OTP: $e')),
+        );
       }
     }
   }
@@ -103,7 +106,7 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
       ),
       body: Stack(
         children: [
-          /// Bottom Blue Shade (like prototype)
+          // Background Gradient
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -118,102 +121,71 @@ class _WorkerSignInScreenState extends State<WorkerSignInScreen> {
             ),
           ),
 
-          /// Main Content
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
+            child: SingleChildScrollView( // Keyboard එකට ඉඩ දෙන්න
+              padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 30),
-
-                  // LOGO
+                  const SizedBox(height: 20),
                   Image.asset(
                     AppAssets.welcomeLogo,
-                    height: 200,
+                    height: 180,
                     fit: BoxFit.contain,
                   ),
-
-                  const SizedBox(height: 8),
-
-                  /// Welcome
+                  const SizedBox(height: 10),
                   const Text(
                     "Welcome!",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
-
                   const SizedBox(height: 10),
-
                   const Text(
                     "Enter your mobile number to get started. We'll send you a code to verify your account.",
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: Colors.black54),
                   ),
-
-                  const SizedBox(height: 30),
-
-                  /// Input
+                  const SizedBox(height: 35),
                   InputField(
                     label: "Mobile Number",
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
                   ),
-
                   const SizedBox(height: 20),
-
-                  /// Button
                   PrimaryButton(
                     text: _isLoading ? "Sending..." : "Continue",
                     onPressed: _isLoading ? () {} : _sendOTP,
                   ),
-
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Text(
                         _error!,
-                        style: const TextStyle(color: Colors.red, fontSize: 14),
-                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.red, fontSize: 13),
                       ),
                     ),
+                  
+                  const SizedBox(height: 80), // පල්ලෙහාට ඉඩක් තැබීම
 
-                  const Spacer(),
-
-                  /// Terms with clickable blue parts
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black45,
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: const TextStyle(fontSize: 12, color: Colors.black45),
+                      children: [
+                        const TextSpan(text: "By clicking continue, you agree to our "),
+                        TextSpan(
+                          text: "Terms of Service",
+                          style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold),
+                          recognizer: _termsRecognizer,
                         ),
-                        children: [
-                          const TextSpan(
-                            text: "By clicking continue, you agree to our ",
-                          ),
-                          TextSpan(
-                            text: "Terms of Service",
-                            style: const TextStyle(
-                              color: Color(0xFF2563EB),
-                              fontWeight: FontWeight.w600,
-                            ),
-                            recognizer: _termsRecognizer,
-                          ),
-                          const TextSpan(text: " and "),
-                          TextSpan(
-                            text: "Privacy Policy",
-                            style: const TextStyle(
-                              color: Color(0xFF2563EB),
-                              fontWeight: FontWeight.w600,
-                            ),
-                            recognizer: _privacyRecognizer,
-                          ),
-                        ],
-                      ),
+                        const TextSpan(text: " and "),
+                        TextSpan(
+                          text: "Privacy Policy",
+                          style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold),
+                          recognizer: _privacyRecognizer,
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),

@@ -38,7 +38,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyCl4f-KS1P_N1a34qO06IXsR933PfMwi3I',
-    appId: '1:183569548741:web:YOUR_WEB_APP_ID',
+    appId: '1:183569548741:web:5db1ac142be71819d677ac', // Updated with real ID
     messagingSenderId: '183569548741',
     projectId: 'project-techni',
     storageBucket: 'project-techni.firebasestorage.app',
@@ -47,7 +47,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCl4f-KS1P_N1a34qO06IXsR933PfMwi3I',
-    appId: '1:183569548741:ios:YOUR_IOS_APP_ID',
+    appId: '1:183569548741:ios:5db1ac142be71819d677ac', // Updated with real ID
     messagingSenderId: '183569548741',
     projectId: 'project-techni',
     storageBucket: 'project-techni.firebasestorage.app',
@@ -56,7 +56,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCl4f-KS1P_N1a34qO06IXsR933PfMwi3I',
-    appId: '1:183569548741:macos:YOUR_MACOS_APP_ID',
+    appId: '1:183569548741:macos:5db1ac142be71819d677ac', // Updated with real ID
     messagingSenderId: '183569548741',
     projectId: 'project-techni',
     storageBucket: 'project-techni.firebasestorage.app',
