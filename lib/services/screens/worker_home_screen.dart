@@ -694,14 +694,41 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                           'Customer Rating: ',
                           style: TextStyle(color: Colors.black54),
                         ),
-                        ..._buildStars(4.5),
+                        ..._buildStars(job.rating?.toDouble() ?? 5.0),
                         const SizedBox(width: 4),
                         Text(
-                          '4.5',
+                          job.rating?.toString() ?? '5.0',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ],
                     ),
+                    if (job.status == 'completed' && job.review != null && job.review!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.format_quote, color: Colors.blue, size: 16),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                job.review!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                  color: Colors.blue.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
