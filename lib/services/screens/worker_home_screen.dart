@@ -47,6 +47,7 @@ Keep the screen responsive.
 */
 
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -56,6 +57,7 @@ import 'worker_navigation_screen.dart';
 import '../../models/job_request.dart';
 import '../job_service.dart';
 import '../location_service.dart';
+import 'worker_profile_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -83,6 +85,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   StreamSubscription<QuerySnapshot>? _confirmedJobSub;
   bool _hasNavigatedToJob = false;
   String? _streamError;
+  Map<String, dynamic>? _workerProfile;
 
   @override
   void initState() {
@@ -90,6 +93,22 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     _loadDndStatus();
     _subscribeToJobs();
     _listenForConfirmedJobs();
+    _fetchWorkerProfile();
+  }
+
+  Future<void> _fetchWorkerProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _workerProfile = doc.data();
+        });
+      }
+    }
   }
 
   void _subscribeToJobs() {
@@ -242,38 +261,26 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             ],
           ),
           Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                IconButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          _newJobs.isEmpty
-                              ? 'No new notifications'
-                              : '${_newJobs.length} new job request notifications',
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.notifications_none),
-                ),
-                if (_newJobs.isNotEmpty)
-                  Positioned(
-                    right: 10,
-                    top: 10,
-                    child: Container(
-                      width: 9,
-                      height: 9,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
+            padding: const EdgeInsets.only(right: 16),
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WorkerProfileScreen()),
+                ).then((_) => _fetchWorkerProfile());
+              },
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: Colors.blue.shade50,
+                backgroundImage: (_workerProfile?['profileUrl'] != null && _workerProfile!['profileUrl'].toString().isNotEmpty)
+                    ? (_workerProfile!['profileUrl'].toString().startsWith('http')
+                        ? NetworkImage(_workerProfile!['profileUrl'])
+                        : FileImage(File(_workerProfile!['profileUrl']))) as ImageProvider
+                    : null,
+                child: (_workerProfile?['profileUrl'] == null || _workerProfile!['profileUrl'].toString().isEmpty)
+                    ? const Icon(Icons.person, size: 18, color: Colors.blue)
+                    : null,
+              ),
             ),
           ),
         ],
