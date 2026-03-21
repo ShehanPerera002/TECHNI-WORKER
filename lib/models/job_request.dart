@@ -24,6 +24,8 @@ class JobRequest {
   final DateTime? completedAt;
   final DateTime? cancelledAt;
   final String? cancelReason;
+  final int? rating;
+  final String? review;
 
   JobRequest({
     required this.id,
@@ -49,6 +51,8 @@ class JobRequest {
     this.completedAt,
     this.cancelledAt,
     this.cancelReason,
+    this.rating,
+    this.review,
   });
 
   factory JobRequest.fromFirestore(DocumentSnapshot doc) {
@@ -109,6 +113,8 @@ class JobRequest {
       completedAt: parseNullableTimestamp(data['completedAt']),
       cancelledAt: parseNullableTimestamp(data['cancelledAt']),
       cancelReason: data['cancelReason'],
+      rating: data['rating'] as int?,
+      review: data['review'],
     );
   }
 
@@ -135,6 +141,8 @@ class JobRequest {
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'cancelledAt': cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
       'cancelReason': cancelReason,
+      'rating': rating,
+      'review': review,
     };
   }
 }
