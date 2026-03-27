@@ -110,12 +110,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         if (!mounted) return;
 
         if (workerDoc.exists) {
-          String status = workerDoc.get('verificationStatus') ?? 'pending';
-          if (status == 'verified') {
-            Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-          } else {
-            Navigator.pushNamedAndRemoveUntil(context, '/pending', (route) => false);
-          }
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
         } else {
           Navigator.pushNamedAndRemoveUntil(context, '/verified', (route) => false);
         }
