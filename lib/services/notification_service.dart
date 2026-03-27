@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/job_request.dart';
-import 'screens/worker_navigation_screen.dart';
 
 class NotificationService {
   static final NotificationService instance = NotificationService._();
@@ -71,24 +70,10 @@ class NotificationService {
     }
   }
 
-  /// Navigate the worker to the WorkerNavigationScreen when they tap a job notification
+  /// Navigate the worker to the dashboard (home screen) when they tap a job notification
   void _handleNotificationTap(Map<String, dynamic> data) {
-    final jobId = data['jobId'] as String?;
-    if (jobId == null || _navigatorKey?.currentState == null) return;
-
-    // Fetch the full job document from Firestore and navigate
-    FirebaseFirestore.instance.collection('jobRequests').doc(jobId).get().then((doc) {
-      if (!doc.exists) return;
-      final job = JobRequest.fromFirestore(doc);
-
-      _navigatorKey!.currentState!.push(
-        MaterialPageRoute(
-          builder: (context) => WorkerNavigationScreen(job: job),
-        ),
-      );
-    }).catchError((e) {
-      debugPrint('Error fetching job for notification navigation: $e');
-    });
+    if (_navigatorKey?.currentState == null) return;
+    _navigatorKey!.currentState!.pushNamedAndRemoveUntil('/', (route) => false);
   }
 
   Future<void> _saveTokenToFirestore(String token) async {
