@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../models/job_request.dart';
 import '../location_service.dart';
+import 'worker_timer_screen.dart';
 
 class WorkerNavigationScreen extends StatefulWidget {
   final JobRequest job;
@@ -32,39 +33,142 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
   late LatLng _customerLatLng;
 
   String _jobStatus = 'inProgress';
-  int _timerSeconds = 0;
-  DateTime? _jobStartedAt;
-  late final Ticker _ticker;
   StreamSubscription<DocumentSnapshot>? _jobStatusSub;
+
+  bool _isStartingJob = false;
+  String? _currentWorkerId;
+  String? _resolvedCustomerPhone;
 
   @override
   void initState() {
     super.initState();
-    _ticker = Ticker(_onTick);
-    _customerLatLng = LatLng(widget.job.customerLat, widget.job.customerLng);
-    
-    // Update status to inProgress if not already
-    if (widget.job.status == 'customerConfirmed' || widget.job.status == 'searching') {
+    _currentWorkerId = FirebaseAuth.instance.currentUser?.uid;
+
+    // Convert GeoPoint to LatLng safely
+    if (widget.job.customerLocation != null) {
+      _customerLatLng = LatLng(
+        widget.job.customerLocation!.latitude,
+        widget.job.customerLocation!.longitude,
+      );
+    } else {
+      _customerLatLng = LatLng(widget.job.customerLat, widget.job.customerLng);
+    }
+
+    // Navigation start logic
+    if (widget.job.status == 'customerConfirmed' ||
+        widget.job.status == 'searching') {
       FirebaseFirestore.instance
           .collection('jobRequests')
           .doc(widget.job.id)
           .update({
-            'status': 'inProgress',
-            'navigationStartedAt': FieldValue.serverTimestamp(),
-          });
+        'status': 'inProgress',
+        'navigationStartedAt': FieldValue.serverTimestamp(),
+      });
     }
 
     _jobStatus = widget.job.status;
     LocationService.instance.startNavigationTracking(jobId: widget.job.id);
+    _setInitialWorkerPositionFallback();
     _listenToWorkerLocation();
     _listenToJobStatus();
+    _resolveCustomerPhone();
   }
 
-  void _onTick(Duration duration) {
-    if (_jobStartedAt != null && mounted) {
+  Future<void> _resolveCustomerPhone() async {
+    if (_resolvedCustomerPhone != null && _resolvedCustomerPhone!.trim().isNotEmpty) {
+      return;
+    }
+
+    String? resolved;
+
+    // 1. Try from job model
+    final fromJobModel = widget.job.customerPhone?.toString().trim();
+    debugPrint('[CALL] Job model customerPhone: "$fromJobModel"');
+    debugPrint('[CALL] Job customerId: "${widget.job.customerId}"');
+    if (fromJobModel != null && fromJobModel.isNotEmpty) {
+      resolved = fromJobModel;
+    }
+
+    // 2. Try from customers collection using customerId → field: phone
+    if (resolved == null || resolved.isEmpty) {
+      String customerId = widget.job.customerId.trim();
+
+      // If customerId is empty, get it from jobRequests doc
+      if (customerId.isEmpty) {
+        try {
+          final jobDoc = await FirebaseFirestore.instance
+              .collection('jobRequests')
+              .doc(widget.job.id)
+              .get();
+          customerId = (jobDoc.data()?['customerId'] ?? '').toString().trim();
+          debugPrint('[CALL] customerId from jobRequests doc: "$customerId"');
+        } catch (e) {
+          debugPrint('[CALL] Error reading jobRequests: $e');
+        }
+      }
+
+      if (customerId.isNotEmpty) {
+        try {
+          // First try direct doc lookup
+          var customerDoc = await FirebaseFirestore.instance
+              .collection('customers')
+              .doc(customerId)
+              .get();
+          
+          // If not found or no phone, query by uid field
+          if (!customerDoc.exists || customerDoc.data()?['phone'] == null) {
+            debugPrint('[CALL] Direct doc not found or no phone, querying by uid field...');
+            final query = await FirebaseFirestore.instance
+                .collection('customers')
+                .where('uid', isEqualTo: customerId)
+                .limit(1)
+                .get();
+            if (query.docs.isNotEmpty) {
+              customerDoc = query.docs.first;
+              debugPrint('[CALL] Found customer by uid query: ${customerDoc.id}');
+            }
+          }
+
+          final cData = customerDoc.data();
+          debugPrint('[CALL] Customer doc exists: ${customerDoc.exists}');
+          debugPrint('[CALL] Customer doc keys: ${cData?.keys.toList()}');
+          
+          if (cData != null && cData.containsKey('phone') && cData['phone'] != null) {
+            final phone = cData['phone'].toString().trim();
+            debugPrint('[CALL] Resolved phone: "$phone"');
+            if (phone.isNotEmpty && phone != 'null') {
+              resolved = phone;
+            }
+          }
+        } catch (e) {
+          debugPrint('[CALL] Error reading customers doc: $e');
+        }
+      } else {
+        debugPrint('[CALL] No customerId available — cannot look up phone');
+      }
+    }
+
+    debugPrint('[CALL] Final resolved phone: "$resolved"');
+    if (mounted && resolved != null && resolved.isNotEmpty) {
+      setState(() => _resolvedCustomerPhone = resolved);
+    }
+  }
+
+  Future<void> _setInitialWorkerPositionFallback() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      if (!mounted) return;
+
+      final initial = LatLng(pos.latitude, pos.longitude);
       setState(() {
-        _timerSeconds = DateTime.now().difference(_jobStartedAt!).inSeconds;
+        _workerPosition = initial;
       });
+      _updateMarkers(initial);
+      _updatePolyline(initial);
+    } catch (e) {
+      debugPrint('[NAVIGATION] Initial GPS fallback failed: $e');
     }
   }
 
@@ -77,18 +181,14 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
       if (!doc.exists || !mounted) return;
       final data = doc.data()!;
       final status = data['status'];
-      
-      // Update customer location if changed
+
       if (data['customerLocation'] is GeoPoint) {
         final geo = data['customerLocation'] as GeoPoint;
         final newCustomerLatLng = LatLng(geo.latitude, geo.longitude);
-        
-        if (newCustomerLatLng.latitude != _customerLatLng.latitude || 
+
+        if (newCustomerLatLng.latitude != _customerLatLng.latitude ||
             newCustomerLatLng.longitude != _customerLatLng.longitude) {
-          debugPrint('WorkerNavigationScreen: Customer moved! Updating route...');
           _customerLatLng = newCustomerLatLng;
-          
-          // If location changed significantly, update UI
           if (_workerPosition != null) {
             _updateMarkers(_workerPosition!);
             _updatePolyline(_workerPosition!);
@@ -98,22 +198,23 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
 
       setState(() {
         _jobStatus = status;
-        if (status == 'workStarted') {
-          final startedAt = data['jobStartedAt'];
-          if (startedAt is Timestamp) {
-            _jobStartedAt = startedAt.toDate();
-            if (!_ticker.isActive) _ticker.start();
-          }
-        } else if (status == 'completed') {
-           if (_ticker.isActive) _ticker.stop();
-        }
       });
+
+      // ✅ Navigate to timer screen when work starts
+      if (status == 'workStarted' && mounted) {
+        _jobStatusSub?.cancel();
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => WorkerTimerScreen(job: widget.job),
+          ),
+        );
+      }
     });
   }
 
-  /// Listen to this worker's own location updates from Firestore
+
   void _listenToWorkerLocation() {
-    final workerId = FirebaseAuth.instance.currentUser?.uid;
+    final workerId = _currentWorkerId;
     if (workerId == null) return;
 
     _locationSub = FirebaseFirestore.instance
@@ -121,17 +222,20 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
         .doc(workerId)
         .snapshots()
         .listen((doc) {
-      if (!doc.exists) return;
+      if (!doc.exists || !mounted) return;
       final data = doc.data();
       if (data == null) return;
 
       final lat = data['lat'];
       final lng = data['lng'];
 
-      if (lat != null && lng != null) {
+      final latValue = lat is num ? lat.toDouble() : double.tryParse(lat?.toString() ?? '');
+      final lngValue = lng is num ? lng.toDouble() : double.tryParse(lng?.toString() ?? '');
+
+      if (latValue != null && lngValue != null) {
         final workerLatLng = LatLng(
-          (lat as num).toDouble(),
-          (lng as num).toDouble(),
+          latValue,
+          lngValue,
         );
 
         setState(() {
@@ -141,7 +245,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
         _updateMarkers(workerLatLng);
         _updatePolyline(workerLatLng);
 
-        // Auto-center the camera on the worker
         _mapController?.animateCamera(
           CameraUpdate.newLatLng(workerLatLng),
         );
@@ -150,14 +253,15 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
   }
 
   void _updateMarkers(LatLng workerLatLng) {
-    final customerLatLng = LatLng(widget.job.customerLat, widget.job.customerLng);
+    final customerLatLng = _customerLatLng;
 
     setState(() {
       _markers = {
         Marker(
           markerId: const MarkerId('worker'),
           position: workerLatLng,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueAzure),
           infoWindow: const InfoWindow(title: 'You'),
         ),
         Marker(
@@ -176,75 +280,101 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
 
   Future<void> _updatePolyline(LatLng workerLatLng) async {
     final String apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
-    if (apiKey.isEmpty) return;
+    if (apiKey.isEmpty) {
+      debugPrint('[NAVIGATION] GOOGLE_API_KEY not set in .env file');
+      if (mounted) {
+        setState(() {
+          _etaText = 'No API key';
+          _distanceText = '';
+        });
+      }
+      return;
+    }
 
-    final customerLatLng = LatLng(widget.job.customerLat, widget.job.customerLng);
+    final customerLatLng = _customerLatLng;
+
+    // Skip if coordinates are invalid (0,0 = unset)
+    if ((customerLatLng.latitude == 0.0 && customerLatLng.longitude == 0.0) ||
+        (workerLatLng.latitude == 0.0 && workerLatLng.longitude == 0.0)) {
+      debugPrint('[NAVIGATION] Skipping route — invalid coordinates');
+      return;
+    }
+
     final polylinePoints = PolylinePoints(apiKey: apiKey);
 
     try {
+      debugPrint('[NAVIGATION] Route: (${workerLatLng.latitude},${workerLatLng.longitude}) → (${customerLatLng.latitude},${customerLatLng.longitude})');
+      
       final response = await polylinePoints.getRouteBetweenCoordinatesV2(
         request: RoutesApiRequest(
-          origin: PointLatLng(workerLatLng.latitude, workerLatLng.longitude),
-          destination: PointLatLng(customerLatLng.latitude, customerLatLng.longitude),
+          origin:
+              PointLatLng(workerLatLng.latitude, workerLatLng.longitude),
+          destination: PointLatLng(
+              customerLatLng.latitude, customerLatLng.longitude),
           travelMode: TravelMode.driving,
         ),
-      );
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      if (response.routes.isEmpty) {
+        debugPrint('[NAVIGATION] No routes in response');
+        return;
+      }
 
       final result = polylinePoints.convertToLegacyResult(response);
+      if (result.points.isEmpty) {
+        debugPrint('[NAVIGATION] Empty polyline points');
+        return;
+      }
+      
+      final coordinates = result.points
+          .map((p) => LatLng(p.latitude, p.longitude))
+          .toList();
 
-      if (result.points.isNotEmpty) {
-        final coordinates = result.points
-            .map((p) => LatLng(p.latitude, p.longitude))
-            .toList();
+      final route = response.routes.first;
+      final distanceMeters = route.distanceMeters ?? 0;
+      final durationSeconds = route.duration ?? 0;
 
-        // Extract distance and duration from the response
-        if (response.routes.isNotEmpty) {
-          final route = response.routes.first;
-          final distanceMeters = route.distanceMeters ?? 0;
-          final durationSeconds = route.duration ?? 0;
-
-          setState(() {
-            _distanceText = distanceMeters > 1000
-                ? '${(distanceMeters / 1000).toStringAsFixed(1)} km'
-                : '$distanceMeters m';
-            _etaText = _formatDuration(durationSeconds);
-          });
-        }
-
+      if (mounted) {
         setState(() {
+          _distanceText = distanceMeters > 1000
+              ? '${(distanceMeters / 1000).toStringAsFixed(1)} km'
+              : '$distanceMeters m';
+          _etaText = _formatDuration(durationSeconds);
           _polylines = {
             Polyline(
               polylineId: const PolylineId('nav_route'),
               color: const Color(0xFF2563EB),
               points: coordinates,
               width: 5,
+              geodesic: true,
             ),
           };
         });
+        debugPrint('[NAVIGATION] Route OK: $_etaText, $_distanceText');
       }
+    } on TimeoutException {
+      debugPrint('[NAVIGATION] Route timeout — will retry on next location update');
     } catch (e) {
-      debugPrint('Navigation polyline error: $e');
+      debugPrint('[NAVIGATION] Route error: $e');
     }
   }
 
-  /// Format duration in seconds to human-readable
   String _formatDuration(int seconds) {
     if (seconds <= 0) return 'Calculating...';
-    if (seconds < 60) return '$seconds sec';
+    if (seconds < 60) return '${seconds}s';
     final minutes = seconds ~/ 60;
-    if (minutes < 60) return '$minutes min';
+    if (minutes < 60) return '${minutes}m';
     final hours = minutes ~/ 60;
     final remainingMin = minutes % 60;
     return '${hours}h ${remainingMin}m';
   }
 
-  /// Launch Google Maps with turn-by-turn navigation
   Future<void> _openGoogleMapsNavigation() async {
     final lat = _customerLatLng.latitude;
     final lng = _customerLatLng.longitude;
-    final url = Uri.parse(
-      'google.navigation:q=$lat,$lng&mode=d',
-    );
+    final url = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
     final fallbackUrl = Uri.parse(
       'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
     );
@@ -262,7 +392,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
     }
   }
 
-  /// Called when worker taps "Arrived"
   Future<void> _markArrived() async {
     setState(() => _isArriving = true);
 
@@ -272,7 +401,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
           .doc(widget.job.id)
           .update({'status': 'arrived'});
 
-      // Switch back to passive location tracking
       LocationService.instance.stopNavigationTracking();
 
       if (mounted) {
@@ -282,7 +410,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       debugPrint('Error marking arrived: $e');
@@ -290,21 +417,83 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
     }
   }
 
-  /// Format timer seconds to human-readable
-  String _formatTimer(int seconds) {
-    final h = (seconds ~/ 3600).toString().padLeft(2, '0');
-    final m = ((seconds % 3600) ~/ 60).toString().padLeft(2, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    return seconds >= 3600 ? '$h:$m:$s' : '$m:$s';
+  /// Worker taps "Start Job" → sets status='workerStartedWork'
+  /// Customer must then accept before timer starts (status='workStarted')
+  Future<void> _startJob() async {
+    if (_isStartingJob) return;
+    setState(() => _isStartingJob = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('jobRequests')
+          .doc(widget.job.id)
+          .update({
+        'status': 'workerStartedWork',
+        'workerStartedWorkAt': FieldValue.serverTimestamp(),
+      });
+      // _listenToJobStatus() will pick up 'workerStartedWork' and update UI
+      // When customer accepts → status='workStarted' → navigate to timer screen
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStartingJob = false);
+    }
   }
 
-  /// Call the customer
   Future<void> _callCustomer() async {
-    if (widget.job.customerPhone == null || widget.job.customerPhone!.isEmpty) return;
-    final url = Uri.parse('tel:${widget.job.customerPhone}');
+    var phone = _resolvedCustomerPhone?.trim();
+    if (phone == null || phone.isEmpty) {
+      await _resolveCustomerPhone();
+      phone = _resolvedCustomerPhone?.trim();
+    }
+
+    if (phone == null || phone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Customer phone not available')),
+        );
+      }
+      return;
+    }
+
+    final url = Uri.parse('tel:$phone');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open dialer')),
+        );
+      }
     }
+  }
+
+  Widget _infoChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F4FF),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF2563EB)),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              color: Color(0xFF2563EB),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -317,7 +506,7 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customerLatLng = LatLng(widget.job.customerLat, widget.job.customerLng);
+    final customerLatLng = _customerLatLng;
 
     return Scaffold(
       body: Stack(
@@ -359,7 +548,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Back button + title row
                   Row(
                     children: [
                       GestureDetector(
@@ -377,32 +565,13 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      // Call button
-                      if (widget.job.customerPhone != null && widget.job.customerPhone!.isNotEmpty)
-                        GestureDetector(
-                          onTap: _callCustomer,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.phone,
-                              color: Colors.green.shade700,
-                              size: 20,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                   const SizedBox(height: 10),
-
-                  // Category + job title
                   Text(
                     '${widget.job.jobType} • Normal',
-                    style: TextStyle(
-                      color: const Color(0xFF2563EB),
+                    style: const TextStyle(
+                      color: Color(0xFF2563EB),
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
@@ -415,20 +584,20 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on, size: 14, color: Colors.black54),
+                      const Icon(Icons.location_on,
+                          size: 14, color: Colors.black54),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           'Customer Location Map Pin',
-                          style: const TextStyle(color: Colors.black54, fontSize: 12),
+                          style: const TextStyle(
+                              color: Colors.black54, fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 10),
-                  // ETA + Distance
                   Row(
                     children: [
                       _infoChip(Icons.access_time, _etaText),
@@ -442,6 +611,37 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
             ),
           ),
 
+          // ─── Left-Middle Call Button ───────────────────────────
+          if (_jobStatus == 'inProgress' ||
+              _jobStatus == 'arrived' ||
+              _jobStatus == 'workerStartedWork')
+            Positioned(
+              left: 16,
+              top: MediaQuery.of(context).size.height * 0.45,
+              child: GestureDetector(
+                onTap: _callCustomer,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.phone,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+              ),
+            ),
+
           // ─── Bottom Action Buttons / Status ───────────────────────
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -450,7 +650,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
             child: Column(
               children: [
                 if (_jobStatus == 'inProgress') ...[
-                  // Open Google Maps button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -472,7 +671,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // Arrived button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -502,78 +700,43 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
                       ),
                     ),
                   ),
-                ] else if (_jobStatus == 'arrived') ...[
-                  Container(
+                  // ─── Arrived: Show "Start Job" button ─────────────
+                ] else if (_jobStatus == 'arrived' || _jobStatus == 'workerStartedWork') ...[
+                  SizedBox(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.timer_outlined, color: Colors.orange, size: 48),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Waiting for Customer',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        elevation: 4,
+                      ),
+                      onPressed: (_isStartingJob || _jobStatus == 'workerStartedWork') ? null : _startJob,
+                      icon: (_isStartingJob || _jobStatus == 'workerStartedWork')
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.play_arrow),
+                      label: Text(
+                        _jobStatus == 'workerStartedWork'
+                            ? 'Waiting for customer...'
+                            : (_isStartingJob ? 'Starting...' : 'Start Job'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Please wait for the customer to start the work on their app.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey.shade600),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ] else if (_jobStatus == 'workStarted') ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.1),
-                          blurRadius: 20,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'WORK IN PROGRESS',
-                          style: TextStyle(
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _formatTimer(_timerSeconds),
-                          style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.w300,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Timer is synced with customer',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // ─── Completed ────────────────────────────────────
                 ] else if (_jobStatus == 'completed') ...[
                   Container(
                     width: double.infinity,
@@ -583,18 +746,20 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.green.withOpacity(0.1),
+                          color: Colors.green.withValues(alpha: 0.1),
                           blurRadius: 20,
                         ),
                       ],
                     ),
                     child: Column(
                       children: [
-                        const Icon(Icons.check_circle, color: Colors.green, size: 48),
+                        const Icon(Icons.check_circle,
+                            color: Colors.green, size: 48),
                         const SizedBox(height: 12),
                         const Text(
                           'Job Completed!',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 16),
                         SizedBox(
@@ -616,31 +781,6 @@ class _WorkerNavigationScreenState extends State<WorkerNavigationScreen> {
                   ),
                 ],
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F4FF),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFF2563EB)),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-              color: Color(0xFF2563EB),
             ),
           ),
         ],
