@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import 'firebase_options.dart';
 import 'app/routes.dart';
 import 'app/theme.dart';
@@ -13,10 +15,24 @@ import 'services/notification_service.dart';
 import 'services/screens/welcome_screen.dart';
 import 'services/screens/worker_home_screen.dart';
 import 'services/screens/pending_verification_screen.dart';
+import 'services/screens/blocked_screen.dart';
 import 'services/screens/create_profile_screen.dart';
 
 /// Global navigator key — used by NotificationService for navigation on notification taps
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+const String _baseUrl = 'https://techni-backend.onrender.com';
+
+Future<void> _syncWorkerVerificationStatus(String uid) async {
+  try {
+    await http.post(
+      Uri.parse('$_baseUrl/api/worker/sync-verification-status'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'workerId': uid}),
+    ).timeout(const Duration(seconds: 6));
+  } catch (e) {
+    debugPrint('Failed to sync verification status via backend: $e');
+  }
+}
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -60,8 +76,8 @@ class MyApp extends StatelessWidget {
       title: 'TECHNI Worker',
       theme: appTheme,
       
-      // Starting point of the app
-      home: const WelcomeScreen(), 
+      // Centralized auth/profile gate.
+      home: const AuthWrapper(), 
       routes: appRoutes,
     );
   }
@@ -111,12 +127,25 @@ class AuthWrapper extends StatelessWidget {
                     .toString()
                     .trim()
                     .toLowerCase();
+                final walletRaw = data['walletBalance'];
+                final walletBalance = walletRaw is num
+                    ? walletRaw.toDouble()
+                    : double.tryParse(walletRaw?.toString() ?? '0') ?? 0;
+                final isBlockedByBalance = walletBalance < -2000;
+
+                // Keep Firestore status synced with wallet threshold.
+                if (isBlockedByBalance && status != 'blocked') {
+                  _syncWorkerVerificationStatus(uid);
+                  status = 'blocked';
+                }
                 
-                // Logic: If status is 'verified', show Home Screen. 
-                // For any other status (pending/rejected), show Pending Screen.
-                if (status == 'verified') {
+                // Route based on verificationStatus
+                if (status == 'blocked' || isBlockedByBalance) {
+                  return const BlockedScreen();
+                } else if (status == 'verified') {
                   return const WorkerHomeScreen();
                 } else {
+                  // pending / rejected / any other status
                   return const PendingVerificationScreen();
                 }
               }
