@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onJobConfirmed = exports.onWorkerTokenUpdated = exports.onNewJobCreated = void 0;
+exports.onJobConfirmed = exports.onWorkerWalletUpdated = exports.onWorkerTokenUpdated = exports.onNewJobCreated = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const firestore_2 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
@@ -109,6 +109,21 @@ exports.onWorkerTokenUpdated = (0, firestore_2.onDocumentUpdated)("workers/{work
     if (before["fcmToken"] !== after["fcmToken"] && before["fcmToken"]) {
         console.log(`FCM token refreshed for worker ${event.params.workerId}`);
     }
+});
+// ─── Cloud Function: Enforce worker verification status from wallet balance ───
+exports.onWorkerWalletUpdated = (0, firestore_2.onDocumentUpdated)("workers/{workerId}", async (event) => {
+    var _a, _b, _c, _d, _e;
+    const before = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before.data();
+    const after = (_b = event.data) === null || _b === void 0 ? void 0 : _b.after.data();
+    if (!before || !after)
+        return;
+    const afterWallet = Number((_c = after["walletBalance"]) !== null && _c !== void 0 ? _c : 0);
+    const expectedStatus = afterWallet < -2000 ? "blocked" : "verified";
+    const currentStatus = String((_d = after["verificationStatus"]) !== null && _d !== void 0 ? _d : "").toLowerCase();
+    if (currentStatus === expectedStatus)
+        return;
+    await ((_e = event.data) === null || _e === void 0 ? void 0 : _e.after.ref.set({ verificationStatus: expectedStatus }, { merge: true }));
+    console.log(`Worker ${event.params.workerId}: wallet=${afterWallet}, verificationStatus -> ${expectedStatus}`);
 });
 // ─── Cloud Function: Notify worker when customer confirms them ────────────────
 exports.onJobConfirmed = (0, firestore_2.onDocumentUpdated)("jobs/{jobId}", async (event) => {
