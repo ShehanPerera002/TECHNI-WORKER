@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../upload_service.dart'; 
@@ -48,8 +49,9 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
   final List<PlatformFile> _certFiles = [];
   bool _isSaving = false;
   String _loadingMessage = "";
+  static const String _baseUrl = 'https://techni-backend.onrender.com';
 
-  // --- Profile Saving Logic with Sub-collection ---
+  // --- Profile Saving Logic with Backend Initialization ---
   Future<void> _handleSaveProfile() async {
     if (_certFiles.isEmpty) {
       _showError("Please upload at least one professional certificate.");
@@ -85,50 +87,38 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
         if (url != null) certUrls.add(url);
       }
 
-      // 3. Save to Firestore using Write Batch (Atomic Update)
+      // 3. ✅ SECURE: Create profile via backend (controls walletBalance & verificationStatus)
       setState(() => _loadingMessage = "Finalizing your profile...");
       
-      final WriteBatch batch = FirebaseFirestore.instance.batch();
-      final DocumentReference workerRef = FirebaseFirestore.instance.collection('workers').doc(uid);
-
-      // Set Main Worker Profile
-      batch.set(workerRef, {
-        'uid': uid,
-        'name': widget.name,
-        'nic': widget.nic,
-        'phoneNumber': widget.phone,
-        'dob': widget.birthDate,
-        'languages': widget.languages, // Saving as Array/List
-        'category': selectedCategory,
-        'location': GeoPoint(widget.latitude, widget.longitude),
-        'profileUrl': profileUrl,
-        'nicFrontUrl': nicFrontUrl,
-        'nicBackUrl': nicBackUrl,
-        'policeReportUrl': policeUrl,
-        'certificates': certUrls,
-        'verificationStatus': 'pending',
-        'isOnline': false,
-        'averageRating': 5.0,
-        'ratingCount': 1,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Add Welcome Review to Sub-collection
-      final DocumentReference reviewRef = workerRef.collection('reviews').doc(); // Auto-ID
-      batch.set(reviewRef, {
-        'reviewerName': 'System',
-        'rating': 5,
-        'comment': 'Welcome to the platform! Your profile is pending verification.',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-
-      // Execute Batch
-      await batch.commit();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/worker/create-profile'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'uid': uid,
+          'name': widget.name,
+          'nic': widget.nic,
+          'phoneNumber': widget.phone,
+          'dob': widget.birthDate,
+          'languages': widget.languages,
+          'category': selectedCategory,
+          'latitude': widget.latitude,
+          'longitude': widget.longitude,
+          'profileUrl': profileUrl,
+          'nicFrontUrl': nicFrontUrl,
+          'nicBackUrl': nicBackUrl,
+          'policeReportUrl': policeUrl,
+          'certificates': certUrls,
+        }),
+      );
 
       if (!mounted) return;
-      
-      Navigator.pushNamedAndRemoveUntil(context, '/pending', (route) => false);
 
+      if (response.statusCode == 200) {
+        Navigator.pushNamedAndRemoveUntil(context, '/pending', (route) => false);
+      } else {
+        final body = jsonDecode(response.body);
+        _showError(body['error'] ?? 'Failed to create profile');
+      }
     } catch (e) {
       _showError("Failed to save profile: $e");
     } finally {
