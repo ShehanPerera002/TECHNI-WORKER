@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Backend Test Report</title>
+<style>
+body { font-family: Arial, sans-serif; background: #f3f4f6; color: #111827; }
+.container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
+h1 { color: #1f2937; }
+h2 { color: #374151; margin-top: 40px; }
+.status { font-weight: 700; color: #10b981; }
+table { border-collapse: collapse; width: 100%; margin-top: 18px; }
+th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+th { background: #f9fafb; }
+.summary { margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Backend Test Report</h1>
+<p class="summary">Overall Status: <span class="status">PASS</span></p>
+<p class="summary">Total Tests: 15, Passed: 15, Failed: 0, Pass Rate: 100.0%</p>
+<p class="summary">Total Duration: 0.51s</p>
+<p class="summary">Generated on: 2026-03-28T01:03:12.512060</p>
+      <h2 style="color: #374151; margin-top: 40px;">Feature: AuthService</h2>
+      <p class="summary">Status: <span style="font-weight: 700; color: #10b981;">PASS</span></p>
+      <p class="summary">Tests: 3, Passed: 3, Failed: 0</p>
+              <h3 style="color: #475569;">Subfeature: verification</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>Initial verificationId is null</td>
+            <td>✅</td>
+            <td>0.05s</td>
+            <td>Verification ID starts as null</td>
+          </tr>
+                    <tr style="background: #dcfce7;">
+            <td>setVerificationId sets internal value</td>
+            <td>✅</td>
+            <td>0.03s</td>
+            <td>Setter updates verification ID correctly</td>
+          </tr>
+          </tbody>
+        </table>
+                <h3 style="color: #475569;">Subfeature: currentUser</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>getCurrentUser is null without Firebase init</td>
+            <td>✅</td>
+            <td>0.04s</td>
+            <td>Current user returns null when Firebase not initialized</td>
+          </tr>
+          </tbody>
+        </table>
+        
+            <h2 style="color: #374151; margin-top: 40px;">Feature: JobService</h2>
+      <p class="summary">Status: <span style="font-weight: 700; color: #10b981;">PASS</span></p>
+      <p class="summary">Tests: 2, Passed: 2, Failed: 0</p>
+              <h3 style="color: #475569;">Subfeature: categoryNormalization</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>normalizeCategory removes special chars and lowercases</td>
+            <td>✅</td>
+            <td>0.02s</td>
+            <td>Category normalization works for various inputs</td>
+          </tr>
+          </tbody>
+        </table>
+                <h3 style="color: #475569;">Subfeature: categoryMapping</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>resolveWorkerCategoryKey maps categories correctly</td>
+            <td>✅</td>
+            <td>0.03s</td>
+            <td>Worker category mapping functions properly</td>
+          </tr>
+          </tbody>
+        </table>
+        
+            <h2 style="color: #374151; margin-top: 40px;">Feature: LocationService</h2>
+      <p class="summary">Status: <span style="font-weight: 700; color: #10b981;">PASS</span></p>
+      <p class="summary">Tests: 2, Passed: 2, Failed: 0</p>
+              <h3 style="color: #475569;">Subfeature: singleton</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>LocationService singleton instance exists</td>
+            <td>✅</td>
+            <td>0.02s</td>
+            <td>Singleton pattern implemented correctly</td>
+          </tr>
+          </tbody>
+        </table>
+                <h3 style="color: #475569;">Subfeature: stopSharing</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>Calling stopSharing does not throw (no location permission mock)</td>
+            <td>✅</td>
+            <td>0.05s</td>
+            <td>Stop sharing handles missing permissions gracefully</td>
+          </tr>
+          </tbody>
+        </table>
+        
+            <h2 style="color: #374151; margin-top: 40px;">Feature: NotificationService</h2>
+      <p class="summary">Status: <span style="font-weight: 700; color: #10b981;">PASS</span></p>
+      <p class="summary">Tests: 2, Passed: 2, Failed: 0</p>
+              <h3 style="color: #475569;">Subfeature: singleton</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>singleton instance exists</td>
+            <td>✅</td>
+            <td>0.02s</td>
+            <td>NotificationService singleton available</td>
+          </tr>
+          </tbody>
+        </table>
+                <h3 style="color: #475569;">Subfeature: initialize</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>initialize is available as an async function</td>
+            <td>✅</td>
+            <td>0.03s</td>
+            <td>Initialize method exists and is async</td>
+          </tr>
+          </tbody>
+        </table>
+        
+            <h2 style="color: #374151; margin-top: 40px;">Feature: UploadService</h2>
+      <p class="summary">Status: <span style="font-weight: 700; color: #10b981;">PASS</span></p>
+      <p class="summary">Tests: 2, Passed: 2, Failed: 0</p>
+              <h3 style="color: #475569;">Subfeature: instantiation</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>UploadService can be instantiated</td>
+            <td>✅</td>
+            <td>0.02s</td>
+            <td>Constructor works without errors</td>
+          </tr>
+          </tbody>
+        </table>
+                <h3 style="color: #475569;">Subfeature: uploadToCloudinary</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>uploadToCloudinary returns null for empty PlatformFile mock</td>
+            <td>✅</td>
+            <td>0.08s</td>
+            <td>Handles empty files gracefully</td>
+          </tr>
+          </tbody>
+        </table>
+        
+            <h2 style="color: #374151; margin-top: 40px;">Feature: JobModel</h2>
+      <p class="summary">Status: <span style="font-weight: 700; color: #10b981;">PASS</span></p>
+      <p class="summary">Tests: 2, Passed: 2, Failed: 0</p>
+              <h3 style="color: #475569;">Subfeature: toMap</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>toMap should include all provided fields and optional completedAt</td>
+            <td>✅</td>
+            <td>0.03s</td>
+            <td>Serialization includes all fields correctly</td>
+          </tr>
+          </tbody>
+        </table>
+                <h3 style="color: #475569;">Subfeature: fromFirestore</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>fromFirestore should parse numbers and dates correctly</td>
+            <td>✅</td>
+            <td>0.04s</td>
+            <td>Deserialization handles types properly</td>
+          </tr>
+          </tbody>
+        </table>
+        
+            <h2 style="color: #374151; margin-top: 40px;">Feature: JobRequest</h2>
+      <p class="summary">Status: <span style="font-weight: 700; color: #10b981;">PASS</span></p>
+      <p class="summary">Tests: 2, Passed: 2, Failed: 0</p>
+              <h3 style="color: #475569;">Subfeature: toMap</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>toMap should include correct keys and values</td>
+            <td>✅</td>
+            <td>0.03s</td>
+            <td>JobRequest serialization works</td>
+          </tr>
+          </tbody>
+        </table>
+                <h3 style="color: #475569;">Subfeature: defaultFields</h3>
+        <table>
+        <thead>
+        <tr><th>Test Name</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        </thead>
+        <tbody>          <tr style="background: #dcfce7;">
+            <td>constructor defaults for optional fields</td>
+            <td>✅</td>
+            <td>0.02s</td>
+            <td>Optional fields have correct defaults</td>
+          </tr>
+          </tbody>
+        </table>
+        
+      
+</div>
+</body>
+</html>
